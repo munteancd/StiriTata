@@ -15,7 +15,7 @@ def summarize(
     weather: Optional[WeatherReport],
     bulletin_date: datetime,
     client: Any,
-    model: str = "gpt-4o-mini",
+    model: str = "gpt-4o",
     max_retries: int = 2,
     retry_sleep: float = 2.0,
 ) -> str:
@@ -34,6 +34,7 @@ def summarize(
                 model=model,
                 messages=messages,
                 temperature=0.4,
+                max_tokens=4096,
             )
             text = response.choices[0].message.content.strip()
             return text
