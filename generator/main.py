@@ -22,9 +22,10 @@ from .tts import PiperConfig, synthesize
 log = logging.getLogger(__name__)
 
 # Cap items per category to keep the ChatGPT prompt under the TPM limit
-# (gpt-4o tier-1 is 30K tokens/min). With ~100 tokens/item, 10 items/cat × 5 cats
-# ≈ 5K input tokens + 2K system prompt; well under the limit.
-DEFAULT_MAX_ITEMS_PER_CATEGORY = 10
+# (gpt-4o tier-1 is 30K tokens/min). With ~100 tokens/item, 12 items/cat × 5 cats
+# ≈ 6K input tokens + 2K system prompt + 4K output budget ≈ 12K; well under 30K.
+# More items per category = more material for ChatGPT to expand the bulletin with.
+DEFAULT_MAX_ITEMS_PER_CATEGORY = 12
 
 
 def _cap_items_per_category(items: List[NewsItem], max_per_cat: int) -> List[NewsItem]:
