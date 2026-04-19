@@ -4,9 +4,10 @@ import json
 import logging
 import os
 import shutil
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import yaml
 from dotenv import load_dotenv
@@ -14,10 +15,27 @@ from dotenv import load_dotenv
 from .build_manifest import build_manifest
 from .fetch_news import fetch_all_sources
 from .fetch_weather import fetch_weather
+from .models import NewsItem
 from .summarize import summarize
 from .tts import PiperConfig, synthesize
 
 log = logging.getLogger(__name__)
+
+# Cap items per category to keep the ChatGPT prompt under the TPM limit
+# (gpt-4o tier-1 is 30K tokens/min). With ~100 tokens/item, 10 items/cat × 5 cats
+# ≈ 5K input tokens + 2K system prompt; well under the limit.
+DEFAULT_MAX_ITEMS_PER_CATEGORY = 10
+
+
+def _cap_items_per_category(items: List[NewsItem], max_per_cat: int) -> List[NewsItem]:
+    by_cat: "defaultdict[str, list[NewsItem]]" = defaultdict(list)
+    for it in items:
+        by_cat[it.category].append(it)
+    capped: List[NewsItem] = []
+    for cat, cat_items in by_cat.items():
+        cat_items.sort(key=lambda x: x.published, reverse=True)
+        capped.extend(cat_items[:max_per_cat])
+    return capped
 
 
 async def run_pipeline(
@@ -28,6 +46,7 @@ async def run_pipeline(
     openai_client: Any,
     openweather_api_key: str,
     now: datetime | None = None,
+    max_items_per_category: int = DEFAULT_MAX_ITEMS_PER_CATEGORY,
 ) -> None:
     now = now or datetime.now(tz=timezone.utc)
     public_dir.mkdir(parents=True, exist_ok=True)
@@ -46,6 +65,9 @@ async def run_pipeline(
     )
     items, weather = await asyncio.gather(news_task, weather_task)
     log.info("fetched %d news items, weather=%s", len(items), bool(weather))
+
+    items = _cap_items_per_category(items, max_items_per_category)
+    log.info("capped to %d items (max %d per category)", len(items), max_items_per_category)
 
     # 2. Summarize via ChatGPT. On failure, keep yesterday's MP3.
     try:

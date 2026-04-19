@@ -45,19 +45,29 @@ jobs:
         if: steps.cache-voice.outputs.cache-hit != 'true'
         run: bash scripts/download_voice.sh
 
-      - name: Fetch previous public/ from gh-pages (for fallback)
+      - name: Seed public/ from live site (fallback for generator failures)
+        env:
+          PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
         run: |
-          git fetch origin gh-pages || echo "no gh-pages yet"
-          if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
-            mkdir -p public
-            git --work-tree=public checkout origin/gh-pages -- . || true
-          fi
+          mkdir -p public public/archive
+          # If the generator fails today, the fallback keeps yesterday's bulletin live.
+          curl -sfL "$PAGES_URL/latest.mp3"  -o public/latest.mp3  || echo "no previous mp3 (first run?)"
+          curl -sfL "$PAGES_URL/latest.json" -o public/latest.json || echo "no previous json"
+          curl -sfL "$PAGES_URL/latest.txt"  -o public/latest.txt  || true
 
       - name: Run generator
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
         run: python -m generator.main --sources sources.yaml --public-dir public
+
+      - name: Verify bulletin is present (allow fallback, fail if totally missing)
+        run: |
+          if [ ! -f public/latest.mp3 ] || [ ! -f public/latest.json ]; then
+            echo "::error::Neither today's nor yesterday's bulletin is available — aborting deploy to preserve Pages state."
+            exit 1
+          fi
+          ls -lh public/latest.mp3 public/latest.json
 
       - name: Copy PWA static files into public/
         run: |

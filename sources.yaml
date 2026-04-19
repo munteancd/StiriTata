@@ -6,7 +6,6 @@ local_politics:
     url: https://caon.ro/feed/
   - name: Banatul Montan
     url: https://banatulmontan.ro/feed/
-  # Caraș-Severin Expres: URL de confirmat manual la primul run
 
 national_politics:
   - name: Digi24
@@ -21,22 +20,21 @@ national_politics:
 international_politics:
   - name: BBC World
     url: https://feeds.bbci.co.uk/news/world/rss.xml
-  - name: Reuters World
-    url: https://www.reutersagency.com/feed/?best-topics=political-general&post_type=best
+  # Reuters public RSS was discontinued; BBC + whatever international
+  # shows up via Digi24/HotNews is enough for the segment.
 
 football_ro:
-  - name: GSP
-    url: https://www.gsp.ro/rss
   - name: ProSport
     url: https://www.prosport.ro/rss
   - name: Digi Sport
     url: https://www.digisport.ro/rss
+  # GSP's /rss endpoint 404s as of 2026-04; drop it until they publish a feed again.
 
 football_eu:
   - name: BBC Sport Football
     url: https://feeds.bbci.co.uk/sport/football/rss.xml
-  - name: UEFA News
-    url: https://www.uefa.com/rssfeed/news/rss.xml
+  # UEFA's rssfeed endpoint redirects to /errors/notfound; BBC covers
+  # Champions/Europa/Conference adequately for tata's bulletin.
 
 weather:
   city: Reșița
