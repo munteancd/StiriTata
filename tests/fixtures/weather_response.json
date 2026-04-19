@@ -1,0 +1,13 @@
+{
+  "current": {
+    "temp": 12.3,
+    "wind_speed": 3.2,
+    "weather": [{"description": "cer senin"}]
+  },
+  "daily": [
+    {
+      "temp": {"min": 7.8, "max": 18.4},
+      "rain": 0.0
+    }
+  ]
+}
