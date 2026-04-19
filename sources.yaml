@@ -1,0 +1,45 @@
+# RSS feed sources, grouped by bulletin section.
+# Comment out or remove entries if a feed dies; edit URLs as needed.
+
+local_politics:
+  - name: Caon
+    url: https://caon.ro/feed/
+  - name: Banatul Montan
+    url: https://banatulmontan.ro/feed/
+  # Caraș-Severin Expres: URL de confirmat manual la primul run
+
+national_politics:
+  - name: Digi24
+    url: https://www.digi24.ro/rss
+  - name: HotNews
+    url: https://www.hotnews.ro/rss
+  - name: G4Media
+    url: https://www.g4media.ro/feed
+  - name: Adevărul
+    url: https://adevarul.ro/rss/
+
+international_politics:
+  - name: BBC World
+    url: https://feeds.bbci.co.uk/news/world/rss.xml
+  - name: Reuters World
+    url: https://www.reutersagency.com/feed/?best-topics=political-general&post_type=best
+
+football_ro:
+  - name: GSP
+    url: https://www.gsp.ro/rss
+  - name: ProSport
+    url: https://www.prosport.ro/rss
+  - name: Digi Sport
+    url: https://www.digisport.ro/rss
+
+football_eu:
+  - name: BBC Sport Football
+    url: https://feeds.bbci.co.uk/sport/football/rss.xml
+  - name: UEFA News
+    url: https://www.uefa.com/rssfeed/news/rss.xml
+
+weather:
+  city: Reșița
+  country: RO
+  lat: 45.3
+  lon: 21.8833

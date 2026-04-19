@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Environment
+.env
+GPT.txt
+
+# Build artifacts / audio
+public/latest.mp3
+public/latest.json
+public/archive/
+*.mp3
+!tests/fixtures/*.mp3
+
+# Piper voice models (downloaded at runtime)
+generator/voices/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
