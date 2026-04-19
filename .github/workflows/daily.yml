@@ -1,0 +1,79 @@
+name: daily-bulletin
+
+on:
+  schedule:
+    # 03:00 UTC == 06:00 Romania (EET) / 06:00 EEST.
+    # During DST (EEST, UTC+3) this fires at 05:00 local; acceptable.
+    - cron: "0 3 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install system deps (ffmpeg)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+
+      - name: Cache Piper voice model
+        id: cache-voice
+        uses: actions/cache@v4
+        with:
+          path: generator/voices
+          key: piper-voice-ro_RO-mihai-medium-v1
+
+      - name: Download Piper voice (if not cached)
+        if: steps.cache-voice.outputs.cache-hit != 'true'
+        run: bash scripts/download_voice.sh
+
+      - name: Fetch previous public/ from gh-pages (for fallback)
+        run: |
+          git fetch origin gh-pages || echo "no gh-pages yet"
+          if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
+            mkdir -p public
+            git --work-tree=public checkout origin/gh-pages -- . || true
+          fi
+
+      - name: Run generator
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+        run: python -m generator.main --sources sources.yaml --public-dir public
+
+      - name: Copy PWA static files into public/
+        run: |
+          cp -r pwa/* public/
+
+      - name: Upload artifact for Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
