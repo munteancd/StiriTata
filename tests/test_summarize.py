@@ -11,7 +11,7 @@ from generator.prompt import (
     build_intro,
     build_user_prompt,
 )
-from generator.summarize import summarize
+from generator.summarize import _strip_trailing_wrap_up, summarize
 
 
 def _sample_items() -> list[NewsItem]:
@@ -167,6 +167,45 @@ def test_summarize_tolerates_a_couple_section_failures():
     assert text.count("OK_SECTION") == 4
     # 2 fallback lines present
     assert "nu avem informații" in text.lower() or "trecem mai departe" in text.lower()
+
+
+def test_strip_wrap_up_removes_acestea_au_fost():
+    text = (
+        "În Ucraina, șeful poliției a demisionat.\n\n"
+        "Acestea au fost principalele știri din fotbalul românesc."
+    )
+    out = _strip_trailing_wrap_up(text, section_key="football_ro")
+    assert "Acestea au fost" not in out
+    assert "demisionat" in out
+
+
+def test_strip_wrap_up_removes_in_concluzie():
+    text = (
+        "Bayern a câștigat cu patru la doi.\n\n"
+        "În concluzie, săptămâna a fost plină de evenimente."
+    )
+    out = _strip_trailing_wrap_up(text, section_key="football_eu")
+    assert "În concluzie" not in out
+
+
+def test_strip_wrap_up_preserves_meteo_closing():
+    """Meteo's practical closing tip must NOT be stripped."""
+    text = (
+        "Temperatura este de șapte grade.\n\n"
+        "Luați o umbrelă, se anunță ploi pe parcursul zilei."
+    )
+    out = _strip_trailing_wrap_up(text, section_key="meteo")
+    assert "umbrelă" in out
+
+
+def test_strip_wrap_up_leaves_real_news_alone():
+    """Text without a trailing filler wrap-up is returned unchanged."""
+    text = (
+        "CSM Reșița a pierdut meciul cu unu la doi.\n\n"
+        "Antrenorul a declarat că echipa nu merita să piardă."
+    )
+    out = _strip_trailing_wrap_up(text, section_key="local_politics")
+    assert out == text
 
 
 def test_summarize_retries_transient_failure_then_succeeds():

@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from datetime import datetime
 from typing import Any, List, Optional
@@ -21,6 +22,52 @@ _SECTION_FALLBACK = (
     "Din păcate, pentru această secțiune nu avem informații disponibile astăzi. "
     "Trecem mai departe."
 )
+
+# gpt-4o loves to close every segment with a filler wrap-up
+# ("Acestea au fost...", "În concluzie, ..."). We ban these in the prompt
+# but the model cheats anyway — so we also strip the final paragraph
+# post-hoc if it matches one of these tell-tale openings.
+# Each pattern matches the START of a paragraph (case-insensitive).
+_WRAP_UP_PATTERNS = [
+    r"^acestea\s+au\s+fost\b",
+    r"^acestea\s+sunt\b",
+    r"^aceasta\s+a\s+fost\b",
+    r"^acesta\s+a\s+fost\b",
+    r"^în\s+concluzie\b",
+    r"^în\s+rezumat\b",
+    r"^în\s+final,\s+(săptămâna|ziua|această)",
+    r"^aceste\s+rezultate\s+(subliniază|arată|reflectă)",
+    r"^aceste\s+evenimente\s+(subliniază|arată|reflectă)",
+    r"^rămâne\s+de\s+văzut\b",
+    r"^rămânem\s+atenți\b",
+]
+_WRAP_UP_REGEX = re.compile(
+    "(" + "|".join(_WRAP_UP_PATTERNS) + ")",
+    re.IGNORECASE,
+)
+
+
+def _strip_trailing_wrap_up(text: str, *, section_key: str) -> str:
+    """Remove the final paragraph if it's a filler wrap-up.
+
+    Meteo is exempt — its closing practical tip is allowed and doesn't
+    match these patterns anyway.
+    """
+    if section_key == "meteo":
+        return text
+    # Split on blank lines first; fall back to single newlines if the model
+    # didn't use paragraph breaks.
+    for sep in ("\n\n", "\n"):
+        if sep in text:
+            paragraphs = text.split(sep)
+            while len(paragraphs) > 1 and _WRAP_UP_REGEX.match(paragraphs[-1].lstrip()):
+                log.info(
+                    "stripping wrap-up from %s: %r",
+                    section_key, paragraphs[-1][:80],
+                )
+                paragraphs.pop()
+            return sep.join(paragraphs).rstrip()
+    return text
 
 
 def _call_section(
@@ -61,6 +108,7 @@ def _call_section(
                 max_tokens=max_tokens,
             )
             text = response.choices[0].message.content.strip()
+            text = _strip_trailing_wrap_up(text, section_key=section.key)
             word_count = len(text.split())
             log.info(
                 "section %s: %d words (target %d, min %d)",
