@@ -38,3 +38,23 @@ def test_bulletin_aggregates_sections_and_metadata():
     )
     assert len(bulletin.sections) == 1
     assert bulletin.sections[0].start_seconds == 15
+
+
+def test_history_item_fields():
+    from generator.models import HistoryItem
+    h = HistoryItem(year=1905, text="Jules Verne publică ultimul său roman.", source_lang="ro")
+    assert h.year == 1905
+    assert h.text.startswith("Jules Verne")
+    assert h.source_lang == "ro"
+
+
+def test_history_candidates_defaults_empty():
+    from generator.models import HistoryCandidates, HistoryItem
+    c = HistoryCandidates(
+        events=[HistoryItem(year=1905, text="t", source_lang="ro")],
+        births=[],
+        deaths=[],
+    )
+    assert len(c.events) == 1
+    assert c.births == []
+    assert c.deaths == []

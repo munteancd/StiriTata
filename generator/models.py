@@ -36,3 +36,17 @@ class Bulletin:
     date: datetime
     sections: List[BulletinSection]
     full_text: str
+
+
+@dataclass
+class HistoryItem:
+    year: int
+    text: str
+    source_lang: str  # "ro" or "en"
+
+
+@dataclass
+class HistoryCandidates:
+    events: List["HistoryItem"]
+    births: List["HistoryItem"]
+    deaths: List["HistoryItem"]
