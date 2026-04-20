@@ -214,7 +214,7 @@ SECTIONS: list[Section] = [
 def build_intro(bulletin_date: datetime) -> str:
     """Hardcoded intro — deterministic, no API call needed."""
     return (
-        f"Bună dimineața, tată. Astăzi este {format_date_ro(bulletin_date)}. "
+        f"Bună dimineața, Ilie. Astăzi este {format_date_ro(bulletin_date)}. "
         "Iată buletinul de știri."
     )
 
