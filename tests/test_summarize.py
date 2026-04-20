@@ -3,12 +3,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from generator.models import NewsItem, WeatherReport
+from generator.models import HistoryCandidates, HistoryItem, NewsItem, WeatherReport
 from generator.prompt import (
     OUTRO,
     SECTIONS,
     SYSTEM_PROMPT,
     build_intro,
+    build_section_user_prompt,
     build_user_prompt,
 )
 from generator.summarize import _strip_trailing_wrap_up, summarize
@@ -44,6 +45,21 @@ def _sample_weather() -> WeatherReport:
         description="cer senin",
         wind_kmh=10.0,
         precipitation_mm=0.0,
+    )
+
+
+def _sample_history() -> HistoryCandidates:
+    return HistoryCandidates(
+        events=[
+            HistoryItem(year=1945, text="Armata Roșie încercuiește Berlinul.", source_lang="ro"),
+            HistoryItem(year=1999, text="Masacrul de la Columbine.", source_lang="ro"),
+        ],
+        births=[
+            HistoryItem(year=1951, text="Luca Turilli, compozitor italian.", source_lang="ro"),
+        ],
+        deaths=[
+            HistoryItem(year=1912, text="Bram Stoker, autorul lui Dracula.", source_lang="ro"),
+        ],
     )
 
 
@@ -138,7 +154,7 @@ def test_summarize_tolerates_a_couple_section_failures():
     fake_client = MagicMock()
 
     # Craft: first 2 sections fail permanently (each hit 3 times = 6 calls),
-    # remaining 4 sections succeed on first try.
+    # remaining len(SECTIONS) - 2 sections succeed on first try.
     call_log = {"n": 0}
 
     def flaky(**kwargs):
@@ -163,8 +179,8 @@ def test_summarize_tolerates_a_couple_section_failures():
     intro = build_intro(datetime(2026, 4, 19, 6, 0, tzinfo=timezone.utc))
     assert text.startswith(intro)
     assert text.endswith(OUTRO)
-    # 4 real sections present
-    assert text.count("OK_SECTION") == 4
+    # len(SECTIONS) - 2 real sections present (2 used fallback)
+    assert text.count("OK_SECTION") == len(SECTIONS) - 2
     # 2 fallback lines present
     assert "nu avem informații" in text.lower() or "trecem mai departe" in text.lower()
 
@@ -261,3 +277,44 @@ def test_summarize_retries_transient_failure_then_succeeds():
     # Total calls: 3 (first section: 2 fails + 1 success) + (len(SECTIONS) - 1) successes
     assert fake_client.chat.completions.create.call_count == 3 + (len(SECTIONS) - 1)
     assert "RECOVERED" in text
+
+
+def test_history_section_is_last_before_outro():
+    """The history section sits between football_eu and the outro."""
+    keys = [s.key for s in SECTIONS]
+    assert keys[-1] == "history"
+    assert "football_eu" in keys
+    assert keys.index("football_eu") == keys.index("history") - 1
+
+
+def test_build_section_user_prompt_for_history_includes_candidates():
+    history_section = next(s for s in SECTIONS if s.key == "history")
+    prompt = build_section_user_prompt(
+        section=history_section,
+        items=[],
+        weather=None,
+        bulletin_date=datetime(2026, 4, 20, 6, 0, tzinfo=timezone.utc),
+        history=_sample_history(),
+    )
+    # Contains events, births, deaths with years and text
+    assert "1945" in prompt
+    assert "Berlinul" in prompt
+    assert "1951" in prompt
+    assert "Turilli" in prompt
+    assert "1912" in prompt
+    assert "Stoker" in prompt
+
+
+def test_build_section_user_prompt_for_non_history_ignores_history_kwarg():
+    """Passing history= to a non-history section is harmless."""
+    football_section = next(s for s in SECTIONS if s.key == "football_eu")
+    prompt = build_section_user_prompt(
+        section=football_section,
+        items=_sample_items(),
+        weather=None,
+        bulletin_date=datetime(2026, 4, 20, 6, 0, tzinfo=timezone.utc),
+        history=_sample_history(),
+    )
+    # History content should not leak into a non-history section
+    assert "Stoker" not in prompt
+    assert "Turilli" not in prompt

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional
 
-from .models import NewsItem, WeatherReport
+from .models import HistoryCandidates, HistoryItem, NewsItem, WeatherReport
 from .text_utils import format_date_ro
 
 # ----------------------------------------------------------------------------
@@ -55,6 +55,28 @@ def _format_weather_block(weather: Optional[WeatherReport]) -> str:
         f"- Vânt: {weather.wind_kmh:.0f} km/h\n"
         f"- Precipitații: {weather.precipitation_mm:.1f} mm"
     )
+
+
+def _format_history_block(history: Optional["HistoryCandidates"]) -> str:
+    if history is None or (
+        not history.events and not history.births and not history.deaths
+    ):
+        return "(candidați istorici indisponibili astăzi)"
+    lines: list[str] = []
+
+    def _append_section(label: str, entries: List["HistoryItem"]) -> None:
+        if not entries:
+            return
+        lines.append(label)
+        for it in entries:
+            tag = "[RO]" if it.source_lang == "ro" else "[EN]"
+            lines.append(f"- {it.year} {tag} {it.text}")
+        lines.append("")
+
+    _append_section("EVENIMENTE:", history.events)
+    _append_section("NAȘTERI:", history.births)
+    _append_section("DECESE:", history.deaths)
+    return "\n".join(lines).rstrip()
 
 
 def _format_items_block(items: List[NewsItem]) -> str:
@@ -268,6 +290,21 @@ SECTIONS: list[Section] = [
             "Dacă input-ul menționează meciuri de azi, spune-le clar."
         ),
     ),
+    Section(
+        key="history",
+        intro_phrase="Înainte de a încheia, câteva momente din istoria zilei de astăzi.",
+        target_words=150,
+        min_words=120,
+        guidance=(
+            "Alege 2 până la 3 momente istorice relevante din candidații furnizați. "
+            "Prioritizează evenimentele românești [RO] dacă există; completează cu "
+            "[EN] doar dacă e nevoie. Stil conversațional, \u201eștiați că\u201d — nu listă "
+            "seacă. Pentru fiecare moment, scrie anul în CUVINTE (de exemplu \u201euna "
+            "nouă sute patruzeci și cinci\u201d). Tranziții naturale între momente "
+            "(\u201eTot pe această zi\u201d, \u201eIar în\u201d). Nu inventa evenimente care nu apar "
+            "în listă."
+        ),
+    ),
 ]
 
 
@@ -295,6 +332,7 @@ def build_section_user_prompt(
     items: List[NewsItem],
     weather: Optional[WeatherReport],
     bulletin_date: datetime,
+    history: Optional[HistoryCandidates] = None,
 ) -> str:
     """Build the user-role prompt for one section's API call."""
     parts = [
@@ -310,6 +348,9 @@ def build_section_user_prompt(
     if section.key == "meteo":
         parts.append("DATE DE INPUT:")
         parts.append(_format_weather_block(weather))
+    elif section.key == "history":
+        parts.append("DATE DE INPUT (AZI ÎN ISTORIE — candidați Wikipedia):")
+        parts.append(_format_history_block(history))
     else:
         # News section — include the matching category
         cat_items = [it for it in items if it.category == section.key]
