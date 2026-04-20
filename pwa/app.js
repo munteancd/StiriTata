@@ -168,7 +168,7 @@
       currentBulletinDate = manifest.date;
       pruneOldPositionKeys(currentBulletinDate);
       audio.src = `latest.mp3?v=${encodeURIComponent(manifest.date)}`;
-      setupMediaSession("Știri Tață", manifest.date);
+      setupMediaSession("Știri Tată", manifest.date);
       restorePositionOnce();
 
       if (Number.isFinite(manifest.duration_seconds)) {
