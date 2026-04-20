@@ -26,8 +26,8 @@ def test_parse_history_response_keeps_year_and_text():
     data = json.loads((FIXTURES / "history_response_ro.json").read_text(encoding="utf-8"))
     cands = parse_history_response(data, source_lang="ro")
     assert len(cands.events) == 3
-    assert cands.events[0].year == 1945
-    assert "Berlin" in cands.events[0].text
+    assert cands.events[0].year == 1999
+    assert "Columbine" in cands.events[0].text
     assert cands.events[0].source_lang == "ro"
     assert len(cands.births) == 2
     assert len(cands.deaths) == 1
