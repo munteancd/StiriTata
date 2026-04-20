@@ -1,0 +1,14 @@
+{
+  "events": [
+    {"year": 1902, "text": "Pierre and Marie Curie refine radium chloride.", "pages": []},
+    {"year": 1972, "text": "Apollo 16 lands on the Moon in the Descartes Highlands.", "pages": []}
+  ],
+  "births": [
+    {"year": 1893, "text": "Harold Lloyd, American actor and comedian.", "pages": []}
+  ],
+  "deaths": [
+    {"year": 1912, "text": "Bram Stoker, Irish novelist, author of Dracula.", "pages": []}
+  ],
+  "holidays": [],
+  "selected": []
+}
