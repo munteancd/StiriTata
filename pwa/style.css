@@ -140,3 +140,16 @@ body {
   color: var(--muted);
   font-size: 1rem;
 }
+
+.resume-hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+  opacity: 1;
+  transition: opacity 600ms ease-out;
+  min-height: 1.2em;
+}
+
+.resume-hint--fading {
+  opacity: 0;
+}

@@ -19,6 +19,90 @@
 
   let wakeLock = null;
 
+  // --- position persistence (Feature 2) ---
+
+  const POSITION_KEY_PREFIX = "stiritata:position:";
+  const POSITION_SAVE_THROTTLE_MS = 10_000;
+  const POSITION_MIN_SECONDS = 10; // below this, don't bother restoring
+  const HINT_FADE_DELAY_MS = 5_000;
+
+  let currentBulletinDate = null; // ISO YYYY-MM-DD from manifest
+  let lastSavedAt = 0;
+
+  function positionKey(date) {
+    return POSITION_KEY_PREFIX + date;
+  }
+
+  function safeGet(key) {
+    try { return localStorage.getItem(key); } catch (_) { return null; }
+  }
+  function safeSet(key, value) {
+    try { localStorage.setItem(key, value); } catch (_) { /* quota/private mode */ }
+  }
+  function safeRemove(key) {
+    try { localStorage.removeItem(key); } catch (_) { /* ignore */ }
+  }
+
+  function savePosition() {
+    if (!currentBulletinDate) return;
+    const pos = audio.currentTime;
+    if (!Number.isFinite(pos) || pos < POSITION_MIN_SECONDS) return;
+    safeSet(positionKey(currentBulletinDate), String(pos));
+  }
+
+  function clearPosition() {
+    if (!currentBulletinDate) return;
+    safeRemove(positionKey(currentBulletinDate));
+  }
+
+  function pruneOldPositionKeys(keepDate) {
+    try {
+      const currentKey = positionKey(keepDate);
+      const toDelete = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(POSITION_KEY_PREFIX) && k !== currentKey) {
+          toDelete.push(k);
+        }
+      }
+      toDelete.forEach(safeRemove);
+    } catch (_) { /* ignore */ }
+  }
+
+  function showResumeHint(seconds) {
+    const hintEl = document.getElementById("resume-hint");
+    if (!hintEl) return;
+    hintEl.textContent = `Continuă de la ${formatTime(seconds)}`;
+    hintEl.hidden = false;
+    hintEl.classList.remove("resume-hint--fading");
+    // Double rAF to let the browser paint the initial opacity:1 state before transitioning.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      setTimeout(() => hintEl.classList.add("resume-hint--fading"), HINT_FADE_DELAY_MS);
+    }));
+  }
+
+  function restorePositionOnce() {
+    if (!currentBulletinDate) return;
+    const raw = safeGet(positionKey(currentBulletinDate));
+    if (raw === null) return;
+    const pos = parseFloat(raw);
+    if (!Number.isFinite(pos) || pos <= POSITION_MIN_SECONDS) return;
+
+    const applyWhenReady = () => {
+      const dur = audio.duration;
+      if (!Number.isFinite(dur) || dur <= 0) return; // metadata still not ready
+      if (pos >= dur) return; // corrupted / desynced
+      audio.currentTime = pos;
+      showResumeHint(pos);
+    };
+
+    if (Number.isFinite(audio.duration) && audio.duration > 0) {
+      applyWhenReady();
+    } else {
+      audio.addEventListener("loadedmetadata", applyWhenReady, { once: true });
+    }
+  }
+
   function formatDateRo(isoDate) {
     const [y, m, d] = isoDate.split("-").map(Number);
     return `${d} ${MONTHS_RO[m - 1]}`;
@@ -81,8 +165,11 @@
       const manifest = await resp.json();
 
       dateEl.textContent = `Buletin din ${formatDateRo(manifest.date)}`;
+      currentBulletinDate = manifest.date;
+      pruneOldPositionKeys(currentBulletinDate);
       audio.src = `latest.mp3?v=${encodeURIComponent(manifest.date)}`;
-      setupMediaSession("Știri Tată", manifest.date);
+      setupMediaSession("Știri Tață", manifest.date);
+      restorePositionOnce();
 
       if (Number.isFinite(manifest.duration_seconds)) {
         timeTotal.textContent = formatTime(manifest.duration_seconds);
@@ -114,8 +201,16 @@
   seekFwd.addEventListener("click", () => seek(30));
 
   audio.addEventListener("play", () => setPlayIcon(true));
-  audio.addEventListener("pause", () => { setPlayIcon(false); releaseWakeLock(); });
-  audio.addEventListener("ended", () => { setPlayIcon(false); releaseWakeLock(); });
+  audio.addEventListener("pause", () => {
+    setPlayIcon(false);
+    releaseWakeLock();
+    savePosition();
+  });
+  audio.addEventListener("ended", () => {
+    setPlayIcon(false);
+    releaseWakeLock();
+    clearPosition();
+  });
 
   audio.addEventListener("loadedmetadata", () => {
     if (Number.isFinite(audio.duration)) {
@@ -130,9 +225,18 @@
     if (dur > 0) {
       progressBar.style.width = `${(cur / dur) * 100}%`;
     }
+    // Throttled save for crash recovery (battery dead, app killed, etc.)
+    const now = Date.now();
+    if (!audio.paused && now - lastSavedAt > POSITION_SAVE_THROTTLE_MS) {
+      savePosition();
+      lastSavedAt = now;
+    }
   });
 
   document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      savePosition();
+    }
     if (document.visibilityState === "visible" && wakeLock === null && !audio.paused) {
       acquireWakeLock();
     }
