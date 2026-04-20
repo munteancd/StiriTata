@@ -152,14 +152,29 @@ Exemple concrete:
 Dacă ești în dubiu cu un nume, alege varianta care se citește cel mai aproape \
 de pronunția reală când e spusă cu fonetică românească.
 
-STIL — FĂRĂ CONCLUZII ARTIFICIALE:
-Nu adăuga fraze de tip „Rămânem atenți la evoluții", „Vom urmări cum...", \
-„Așteptăm cu interes", „Aceasta este o situație care...". Nu face wrap-up \
-la fiecare știre. Nu încheia secțiunea cu o frază de rezumat general \
-(„Acestea au fost principalele știri din..."). Treci de la o știre la alta \
-cu o tranziție scurtă și termină secțiunea la ULTIMA știre, fără concluzie. \
-EXCEPȚIE: la meteo poți închide cu o recomandare practică scurtă (umbrelă, \
-haine groase) dacă vremea o cere.
+STIL — FĂRĂ CONCLUZII, REZUMATE SAU WRAP-UP (REGULĂ CATEGORICĂ):
+Ultima propoziție a secțiunii TREBUIE să fie despre ULTIMA știre concretă, \
+nu o frază de încheiere, nu un rezumat, nu o reflecție generală.
+
+INTERZIS să termini secțiunea cu fraze ca:
+- „Acestea au fost principalele știri din..."
+- „Acestea sunt principalele știri..."
+- „Rămâne de văzut cum vor evolua..."
+- „Vom urmări cu interes..."
+- „Rămânem atenți la evoluții"
+- „Aceste rezultate subliniază..."
+- „Lupta continuă..."
+- orice frază care comentează pe ansamblu sau face conexiuni generale
+
+După ultima știre, OPREȘTE-te. Punct. Fără încheiere.
+
+De asemenea, nu adăuga mini-rezumate după fiecare știre individuală \
+(„Această situație arată...", „Acest caz ridică întrebări..."). Prezintă \
+știrea și treci la următoarea cu o tranziție scurtă ori o conjuncție \
+(„Tot în această zonă", „În altă ordine de idei", „De asemenea").
+
+EXCEPȚIE UNICĂ: doar la meteo poți închide cu o recomandare practică \
+scurtă (umbrelă, haine groase) dacă vremea o cere. Nicăieri altundeva.
 
 OBLIGATORIU — LUNGIME:
 Secțiunea TREBUIE să aibă CEL PUȚIN {min_words} cuvinte. Ideal \
@@ -302,9 +317,18 @@ def build_section_user_prompt(
         parts.append(_format_items_block(cat_items))
 
     parts.append("")
+    closing_rule = (
+        "Termină EXACT la ultima știre concretă, fără frază de închidere, "
+        "fără „Acestea au fost”, fără „Rămâne de văzut”."
+    )
+    if section.key == "meteo":
+        closing_rule = (
+            "Poți închide cu o recomandare practică scurtă (umbrelă, haine groase) "
+            "dacă vremea o cere — o singură propoziție, nu mai mult."
+        )
     parts.append(
         f"Scrie ACUM textul secțiunii „{section.key}”, fără titlu, fără paranteze, "
         f"doar proza pentru microfon. Începe cu fraza de tranziție: "
-        f"„{section.intro_phrase}”."
+        f"„{section.intro_phrase}”. {closing_rule}"
     )
     return "\n".join(parts)
