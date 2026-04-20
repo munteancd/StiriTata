@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from .build_manifest import build_manifest
 from .fetch_news import fetch_all_sources
 from .fetch_weather import fetch_weather
+from .fetch_history import fetch_history
 from .models import NewsItem
 from .summarize import summarize
 from .tts import PiperConfig, synthesize
@@ -56,7 +57,7 @@ async def run_pipeline(
     rss_cfg = {k: v for k, v in sources_cfg.items() if k != "weather"}
     weather_cfg = sources_cfg.get("weather", {})
 
-    # 1. Fetch news + weather concurrently
+    # 1. Fetch news + weather + history concurrently
     news_task = fetch_all_sources(rss_cfg, now=now)
     weather_task = fetch_weather(
         api_key=openweather_api_key,
@@ -64,8 +65,12 @@ async def run_pipeline(
         lon=float(weather_cfg.get("lon", 21.8833)),
         city=weather_cfg.get("city", "Reșița"),
     )
-    items, weather = await asyncio.gather(news_task, weather_task)
-    log.info("fetched %d news items, weather=%s", len(items), bool(weather))
+    history_task = fetch_history(month=now.month, day=now.day)
+    items, weather, history = await asyncio.gather(news_task, weather_task, history_task)
+    log.info(
+        "fetched %d news items, weather=%s, history=%s",
+        len(items), bool(weather), bool(history),
+    )
 
     items = _cap_items_per_category(items, max_items_per_category)
     log.info("capped to %d items (max %d per category)", len(items), max_items_per_category)
@@ -77,6 +82,7 @@ async def run_pipeline(
             weather=weather,
             bulletin_date=now,
             client=openai_client,
+            history=history,
         )
     except Exception as exc:
         log.error("summarize failed, keeping previous bulletin: %s", exc)

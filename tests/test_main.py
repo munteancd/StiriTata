@@ -46,6 +46,7 @@ async def test_pipeline_writes_mp3_and_manifest(tmp_path: Path):
 
     with patch("generator.main.fetch_all_sources", AsyncMock(return_value=_one_item())), \
          patch("generator.main.fetch_weather", AsyncMock(return_value=_wr())), \
+         patch("generator.main.fetch_history", AsyncMock(return_value=None)), \
          patch("generator.main.synthesize", return_value=600.0) as tts_mock:
         # Make synthesize actually create the MP3 file so later steps find it.
         def _mk_mp3(*, text, out_mp3, config):
@@ -94,7 +95,8 @@ async def test_pipeline_preserves_previous_mp3_on_summarize_failure(tmp_path: Pa
     fake_openai.chat.completions.create.side_effect = RuntimeError("api down")
 
     with patch("generator.main.fetch_all_sources", AsyncMock(return_value=_one_item())), \
-         patch("generator.main.fetch_weather", AsyncMock(return_value=_wr())):
+         patch("generator.main.fetch_weather", AsyncMock(return_value=_wr())), \
+         patch("generator.main.fetch_history", AsyncMock(return_value=None)):
         # Pipeline must NOT raise — falls back to previous bulletin.
         await run_pipeline(
             sources_cfg=sources_cfg,
@@ -134,6 +136,7 @@ async def test_pipeline_trims_archive_to_last_7_days(tmp_path: Path):
 
     with patch("generator.main.fetch_all_sources", AsyncMock(return_value=_one_item())), \
          patch("generator.main.fetch_weather", AsyncMock(return_value=_wr())), \
+         patch("generator.main.fetch_history", AsyncMock(return_value=None)), \
          patch("generator.main.synthesize", side_effect=_mk_mp3):
         await run_pipeline(
             sources_cfg=sources_cfg,
@@ -147,3 +150,51 @@ async def test_pipeline_trims_archive_to_last_7_days(tmp_path: Path):
     archived_files = sorted(archive.glob("*.mp3"))
     assert len(archived_files) <= 7
     assert (archive / "2026-04-19.mp3") in archived_files
+
+
+async def test_pipeline_passes_history_to_summarize(tmp_path: Path):
+    from generator.models import HistoryCandidates, HistoryItem
+
+    public = tmp_path / "public"
+    archive = public / "archive"
+
+    sources_cfg = {
+        "national_politics": [{"name": "X", "url": "https://x.example/feed"}],
+        "weather": {"city": "Reșița", "country": "RO", "lat": 45.3, "lon": 21.88},
+    }
+
+    fake_openai = MagicMock()
+    fake_openai.chat.completions.create.return_value = MagicMock(
+        choices=[MagicMock(message=MagicMock(content="Text."))]
+    )
+
+    sample_history = HistoryCandidates(
+        events=[HistoryItem(year=1945, text="Berlinul.", source_lang="ro")],
+        births=[],
+        deaths=[],
+    )
+
+    def _mk_mp3(*, text, out_mp3, config):
+        out_mp3.parent.mkdir(parents=True, exist_ok=True)
+        out_mp3.write_bytes(b"ID3")
+        return 600.0
+
+    with patch("generator.main.fetch_all_sources", AsyncMock(return_value=_one_item())), \
+         patch("generator.main.fetch_weather", AsyncMock(return_value=_wr())), \
+         patch("generator.main.fetch_history", AsyncMock(return_value=sample_history)) as hist_mock, \
+         patch("generator.main.synthesize", side_effect=_mk_mp3), \
+         patch("generator.main.summarize", return_value="Buletin.") as sum_mock:
+        await run_pipeline(
+            sources_cfg=sources_cfg,
+            public_dir=public,
+            archive_dir=archive,
+            openai_client=fake_openai,
+            openweather_api_key="k",
+            now=datetime(2026, 4, 20, 6, 0, tzinfo=timezone.utc),
+        )
+
+    # fetch_history was awaited with (month=4, day=20)
+    hist_mock.assert_awaited_once_with(month=4, day=20)
+    # summarize received our sample history
+    _, kwargs = sum_mock.call_args
+    assert kwargs["history"] is sample_history
