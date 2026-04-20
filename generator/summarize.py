@@ -93,6 +93,7 @@ def summarize(
     model: str = "gpt-4o",
     max_retries: int = 2,
     retry_sleep: float = 2.0,
+    max_section_failures: int = 2,
 ) -> str:
     """Generate the full bulletin text by calling the API once per section.
 
@@ -103,9 +104,13 @@ def summarize(
 
     Intro and outro are hardcoded (no API call needed — they're deterministic).
     If a section's API call permanently fails, we substitute a fallback line
-    and continue, rather than failing the whole bulletin.
+    and continue — but if *too many* sections fall back (default >2 out of 6),
+    we RAISE instead of returning a degraded 30-second bulletin. The caller
+    (main.py) catches the exception and keeps yesterday's MP3 live, which is
+    a far better experience for the listener than a broken short file.
     """
     parts: List[str] = [build_intro(bulletin_date)]
+    failed_sections = 0
 
     for section in SECTIONS:
         text = _call_section(
@@ -118,11 +123,22 @@ def summarize(
             max_retries=max_retries,
             retry_sleep=retry_sleep,
         )
+        if text == _SECTION_FALLBACK:
+            failed_sections += 1
         parts.append(text)
+
+    if failed_sections > max_section_failures:
+        raise RuntimeError(
+            f"too many sections failed ({failed_sections}/{len(SECTIONS)}); "
+            f"refusing to produce degraded bulletin — previous MP3 will be preserved"
+        )
 
     parts.append(OUTRO)
 
     total_words = sum(len(p.split()) for p in parts)
-    log.info("bulletin complete: %d sections, %d words total", len(SECTIONS), total_words)
+    log.info(
+        "bulletin complete: %d sections ok, %d failed, %d words total",
+        len(SECTIONS) - failed_sections, failed_sections, total_words,
+    )
 
     return "\n\n".join(parts)

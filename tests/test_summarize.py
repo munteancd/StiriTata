@@ -113,10 +113,41 @@ def test_summarize_calls_openai_per_section_and_concatenates():
         assert kwargs["messages"][1]["role"] == "user"
 
 
-def test_summarize_falls_back_when_section_permanently_fails():
-    """A section that exhausts retries is replaced by a fallback line, not a crash."""
+def test_summarize_raises_when_too_many_sections_fail():
+    """If more than max_section_failures sections fall back, summarize RAISES.
+    This is critical: we'd rather keep yesterday's bulletin than overwrite
+    it with a degraded 30-second file full of 'no info available'.
+    """
     fake_client = MagicMock()
     fake_client.chat.completions.create.side_effect = RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="too many sections failed"):
+        summarize(
+            items=_sample_items(),
+            weather=_sample_weather(),
+            bulletin_date=datetime(2026, 4, 19, 6, 0, tzinfo=timezone.utc),
+            client=fake_client,
+            model="gpt-4o-mini",
+            max_retries=2,
+            retry_sleep=0.0,
+        )
+
+
+def test_summarize_tolerates_a_couple_section_failures():
+    """Up to max_section_failures (default 2) bad sections → bulletin still returned."""
+    fake_client = MagicMock()
+
+    # Craft: first 2 sections fail permanently (each hit 3 times = 6 calls),
+    # remaining 4 sections succeed on first try.
+    call_log = {"n": 0}
+
+    def flaky(**kwargs):
+        call_log["n"] += 1
+        if call_log["n"] <= 6:  # First 2 sections × 3 attempts each
+            raise RuntimeError("transient")
+        return MagicMock(choices=[MagicMock(message=MagicMock(content="OK_SECTION"))])
+
+    fake_client.chat.completions.create.side_effect = flaky
 
     text = summarize(
         items=_sample_items(),
@@ -126,16 +157,15 @@ def test_summarize_falls_back_when_section_permanently_fails():
         model="gpt-4o-mini",
         max_retries=2,
         retry_sleep=0.0,
+        max_section_failures=2,
     )
 
-    # Each section attempts 1 + max_retries = 3 times
-    expected_calls = len(SECTIONS) * 3
-    assert fake_client.chat.completions.create.call_count == expected_calls
-
-    # Bulletin still returns intro + outro, with fallback text in between
     intro = build_intro(datetime(2026, 4, 19, 6, 0, tzinfo=timezone.utc))
     assert text.startswith(intro)
     assert text.endswith(OUTRO)
+    # 4 real sections present
+    assert text.count("OK_SECTION") == 4
+    # 2 fallback lines present
     assert "nu avem informații" in text.lower() or "trecem mai departe" in text.lower()
 
 

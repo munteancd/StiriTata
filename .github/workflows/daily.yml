@@ -2,8 +2,8 @@ name: daily-bulletin
 
 on:
   schedule:
-    # 03:00 UTC == 06:00 Romania (EET) / 06:00 EEST.
-    # During DST (EEST, UTC+3) this fires at 05:00 local; acceptable.
+    # 03:00 UTC fires at 06:00 local during DST (EEST, UTC+3, late March → late October).
+    # During winter (EET, UTC+2) it fires at 05:00 local — still before wake time, acceptable.
     - cron: "0 3 * * *"
   workflow_dispatch: {}
 
