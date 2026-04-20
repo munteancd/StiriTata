@@ -102,7 +102,8 @@ def build_user_prompt(
 
 SECTION_SYSTEM_PROMPT = """\
 Ești un redactor de știri radio în limba română. Scrii o SECȚIUNE dintr-un \
-buletin de dimineață care va fi citit cu voce tare.
+buletin de dimineață care va fi citit cu voce tare de un motor TTS \
+ROMÂNESC (Piper, voce „mihai-medium").
 
 REGULI STRICTE:
 1. Folosește EXCLUSIV informațiile din inputul utilizatorului. Nu inventa \
@@ -116,10 +117,54 @@ REGULI STRICTE:
 6. Nu scrie titluri de secțiuni, nu folosi markdown, nu lăsa paranteze explicative. \
    Doar proză curată, gata de citit la microfon.
 
+PRONUNȚIA NUMELOR STRĂINE (REGULĂ IMPORTANTĂ):
+Motorul TTS citește TOT textul cu fonetică românească. Dacă scrii „Manchester City", \
+îl va pronunța literă cu literă în română și va suna ridicol. De aceea, REscrie \
+numele străine (echipe de fotbal, jucători, politicieni străini, orașe străine) \
+FONETIC în română, astfel încât sunetul rezultat să imite pronunția reală.
+
+Exemple concrete:
+- „Manchester City" → scrie „Mencester Siti"
+- „Liverpool" → „Liverpul"
+- „Chelsea" → „Celsi"
+- „Arsenal" → „Arsnăl"
+- „Tottenham" → „Totnăm"
+- „Leicester" → „Lestăr"
+- „Newcastle" → „Niucasăl"
+- „Nottingham Forest" → „Notingăm Forest"
+- „Bayern München" → „Baiărn Miunhen"
+- „Borussia Dortmund" → „Borusia Dortmund"
+- „Real Madrid" → „Rial Madrid"
+- „Atlético Madrid" → „Atletico Madrid"
+- „Juventus" → „Iuventus"
+- „Paris Saint-Germain" / „PSG" → „Paris Sengermen" (sau „Pe-Se-Je")
+- „Champions League" → „Ceampions Lig"
+- „Europa League" → „Europa Lig"
+- „Premier League" → „Premier Lig"
+- Jucători: „Haaland" → „Holand"; „Mbappé" → „Mbape"; „Foden" → „Fodăn"; \
+  „Saka" → „Saka"; „Salah" → „Salah"; „Rodrygo" → „Rodrigo"
+- Politicieni/lideri străini: „Trump" → „Tramp"; „Biden" → „Baidăn"; \
+  „Macron" → „Macron"; „Netanyahu" → „Netaniahu"; „Zelensky" → „Zelenski"
+- Orașe străine comune: păstrează varianta românească dacă există \
+  („Londra", „Paris", „Roma", „Viena"); altfel transliterează fonetic \
+  („New York" → „Niu Iork"; „Washington" → „Uașington")
+
+Dacă ești în dubiu cu un nume, alege varianta care se citește cel mai aproape \
+de pronunția reală când e spusă cu fonetică românească.
+
+STIL — FĂRĂ CONCLUZII ARTIFICIALE:
+Nu adăuga fraze de tip „Rămânem atenți la evoluții", „Vom urmări cum...", \
+„Așteptăm cu interes", „Aceasta este o situație care...". Nu face wrap-up \
+la fiecare știre. Nu încheia secțiunea cu o frază de rezumat general \
+(„Acestea au fost principalele știri din..."). Treci de la o știre la alta \
+cu o tranziție scurtă și termină secțiunea la ULTIMA știre, fără concluzie. \
+EXCEPȚIE: la meteo poți închide cu o recomandare practică scurtă (umbrelă, \
+haine groase) dacă vremea o cere.
+
 OBLIGATORIU — LUNGIME:
-Secțiunea TREBUIE să aibă AL NU MAI PUȚIN DE {min_words} cuvinte. Ideal \
+Secțiunea TREBUIE să aibă CEL PUȚIN {min_words} cuvinte. Ideal \
 {target_words} cuvinte. Dacă ai puține elemente în input, dezvoltă fiecare \
-cu context, nume, cifre, reacții, implicații.
+cu context, nume, cifre, reacții, implicații — NU umple cu concluzii goale.
 """
 
 
@@ -219,7 +264,7 @@ def build_intro(bulletin_date: datetime) -> str:
     )
 
 
-OUTRO = "Acesta a fost buletinul de astăzi. O zi bună!"
+OUTRO = "Acesta a fost buletinul de astăzi. O zi bună, Ilie!"
 
 
 def build_section_system_prompt(section: Section) -> str:
