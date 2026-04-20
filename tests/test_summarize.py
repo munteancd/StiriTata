@@ -198,6 +198,17 @@ def test_strip_wrap_up_preserves_meteo_closing():
     assert "umbrelă" in out
 
 
+def test_strip_wrap_up_removes_inline_in_concluzie():
+    """Model sometimes glues the wrap-up onto the last news sentence, no \\n\\n."""
+    text = (
+        "Frank Lampard de la Coventry a fost desemnat antrenorul sezonului. "
+        "În concluzie, fotbalul european ne-a oferit meciuri spectaculoase."
+    )
+    out = _strip_trailing_wrap_up(text, section_key="football_eu")
+    assert "În concluzie" not in out
+    assert "Lampard" in out
+
+
 def test_strip_wrap_up_leaves_real_news_alone():
     """Text without a trailing filler wrap-up is returned unchanged."""
     text = (

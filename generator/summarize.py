@@ -48,26 +48,37 @@ _WRAP_UP_REGEX = re.compile(
 
 
 def _strip_trailing_wrap_up(text: str, *, section_key: str) -> str:
-    """Remove the final paragraph if it's a filler wrap-up.
+    """Remove trailing filler wrap-up, at paragraph OR sentence granularity.
 
-    Meteo is exempt — its closing practical tip is allowed and doesn't
-    match these patterns anyway.
+    The model sometimes emits the wrap-up as its own paragraph
+    („…\\n\\nAcestea au fost…") and sometimes glues it onto the last
+    news item („…remarcabile în acest sezon. În concluzie, fotbalul…").
+    We strip both shapes.
+
+    Meteo is exempt — its closing practical tip (umbrella, warm clothes)
+    is allowed and doesn't match these patterns anyway.
     """
     if section_key == "meteo":
         return text
-    # Split on blank lines first; fall back to single newlines if the model
-    # didn't use paragraph breaks.
-    for sep in ("\n\n", "\n"):
-        if sep in text:
-            paragraphs = text.split(sep)
-            while len(paragraphs) > 1 and _WRAP_UP_REGEX.match(paragraphs[-1].lstrip()):
-                log.info(
-                    "stripping wrap-up from %s: %r",
-                    section_key, paragraphs[-1][:80],
-                )
-                paragraphs.pop()
-            return sep.join(paragraphs).rstrip()
-    return text
+
+    # 1. Paragraph-level strip
+    paragraphs = text.split("\n\n") if "\n\n" in text else [text]
+    while len(paragraphs) > 1 and _WRAP_UP_REGEX.match(paragraphs[-1].lstrip()):
+        log.info("stripping wrap-up paragraph from %s: %r",
+                 section_key, paragraphs[-1][:80])
+        paragraphs.pop()
+
+    # 2. Sentence-level strip on the final paragraph (inline wrap-up).
+    # Split on sentence terminators followed by whitespace.
+    last = paragraphs[-1]
+    sentences = re.split(r"(?<=[.!?])\s+", last)
+    while len(sentences) > 1 and _WRAP_UP_REGEX.match(sentences[-1].lstrip()):
+        log.info("stripping wrap-up sentence from %s: %r",
+                 section_key, sentences[-1][:80])
+        sentences.pop()
+    paragraphs[-1] = " ".join(sentences).rstrip()
+
+    return "\n\n".join(paragraphs).rstrip()
 
 
 def _call_section(
