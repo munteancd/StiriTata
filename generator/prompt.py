@@ -298,10 +298,10 @@ SECTIONS: list[Section] = [
         guidance=(
             "Alege 2 până la 3 momente istorice relevante din candidații furnizați. "
             "Prioritizează evenimentele românești [RO] dacă există; completează cu "
-            "[EN] doar dacă e nevoie. Stil conversațional, \u201eștiați că\u201d — nu listă "
-            "seacă. Pentru fiecare moment, scrie anul în CUVINTE (de exemplu \u201euna "
-            "nouă sute patruzeci și cinci\u201d). Tranziții naturale între momente "
-            "(\u201eTot pe această zi\u201d, \u201eIar în\u201d). Nu inventa evenimente care nu apar "
+            "[EN] doar dacă e nevoie. Stil conversațional, „știați că” — nu listă "
+            "seacă. Pentru fiecare moment, scrie anul în CUVINTE (de exemplu „una "
+            "nouă sute patruzeci și cinci”). Tranziții naturale între momente "
+            "(„Tot pe această zi”, „Iar în”). Nu inventa evenimente care nu apar "
             "în listă."
         ),
     ),
