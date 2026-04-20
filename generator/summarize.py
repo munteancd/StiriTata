@@ -4,9 +4,84 @@ from datetime import datetime
 from typing import Any, List, Optional
 
 from .models import NewsItem, WeatherReport
-from .prompt import SYSTEM_PROMPT, build_user_prompt
+from .prompt import (
+    OUTRO,
+    SECTIONS,
+    Section,
+    build_intro,
+    build_section_system_prompt,
+    build_section_user_prompt,
+)
 
 log = logging.getLogger(__name__)
+
+# Fallback text when a section's API call fails permanently.
+# Keeps the bulletin flowing even if one segment errors out.
+_SECTION_FALLBACK = (
+    "Din păcate, pentru această secțiune nu avem informații disponibile astăzi. "
+    "Trecem mai departe."
+)
+
+
+def _call_section(
+    *,
+    section: Section,
+    items: List[NewsItem],
+    weather: Optional[WeatherReport],
+    bulletin_date: datetime,
+    client: Any,
+    model: str,
+    max_retries: int,
+    retry_sleep: float,
+) -> str:
+    """Generate the text for a single bulletin section via one OpenAI call."""
+    system_prompt = build_section_system_prompt(section)
+    user_prompt = build_section_user_prompt(
+        section=section,
+        items=items,
+        weather=weather,
+        bulletin_date=bulletin_date,
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    # Budget ~2x target words in tokens. Romanian averages ~1.5 tokens/word
+    # with gpt-4o tokenizer, so 2x gives comfortable headroom.
+    max_tokens = max(800, section.target_words * 3)
+
+    last_exc: Exception | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.4,
+                max_tokens=max_tokens,
+            )
+            text = response.choices[0].message.content.strip()
+            word_count = len(text.split())
+            log.info(
+                "section %s: %d words (target %d, min %d)",
+                section.key, word_count, section.target_words, section.min_words,
+            )
+            return text
+        except Exception as exc:
+            last_exc = exc
+            log.warning(
+                "section %s attempt %d failed: %s",
+                section.key, attempt + 1, exc,
+            )
+            if attempt < max_retries:
+                time.sleep(retry_sleep * (2**attempt))
+
+    assert last_exc is not None
+    log.error(
+        "section %s permanently failed after %d attempts, using fallback",
+        section.key, max_retries + 1,
+    )
+    return _SECTION_FALLBACK
 
 
 def summarize(
@@ -19,29 +94,35 @@ def summarize(
     max_retries: int = 2,
     retry_sleep: float = 2.0,
 ) -> str:
-    user_prompt = build_user_prompt(
-        items=items, weather=weather, bulletin_date=bulletin_date
-    )
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_prompt},
-    ]
+    """Generate the full bulletin text by calling the API once per section.
 
-    last_exc: Exception | None = None
-    for attempt in range(max_retries + 1):
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=0.4,
-                max_tokens=4096,
-            )
-            text = response.choices[0].message.content.strip()
-            return text
-        except Exception as exc:
-            last_exc = exc
-            log.warning("summarize attempt %d failed: %s", attempt + 1, exc)
-            if attempt < max_retries:
-                time.sleep(retry_sleep * (2**attempt))
-    assert last_exc is not None
-    raise last_exc
+    The per-section architecture gives us reliable control over total length:
+    each call has a focused scope and a narrow word-count target, so the
+    model actually hits it (unlike single-call mode where gpt-4o ignored
+    length directives for the long tail).
+
+    Intro and outro are hardcoded (no API call needed — they're deterministic).
+    If a section's API call permanently fails, we substitute a fallback line
+    and continue, rather than failing the whole bulletin.
+    """
+    parts: List[str] = [build_intro(bulletin_date)]
+
+    for section in SECTIONS:
+        text = _call_section(
+            section=section,
+            items=items,
+            weather=weather,
+            bulletin_date=bulletin_date,
+            client=client,
+            model=model,
+            max_retries=max_retries,
+            retry_sleep=retry_sleep,
+        )
+        parts.append(text)
+
+    parts.append(OUTRO)
+
+    total_words = sum(len(p.split()) for p in parts)
+    log.info("bulletin complete: %d sections, %d words total", len(SECTIONS), total_words)
+
+    return "\n\n".join(parts)

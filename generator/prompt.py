@@ -1,63 +1,29 @@
 # -*- coding: utf-8 -*-
+from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional
 
 from .models import NewsItem, WeatherReport
 from .text_utils import format_date_ro
 
+# ----------------------------------------------------------------------------
+# Whole-bulletin prompt (kept for single-call fallback and for tests).
+# The production path uses per-section prompts below.
+# ----------------------------------------------------------------------------
+
 SYSTEM_PROMPT = """\
 Ești un redactor de știri radio în limba română. Rolul tău este să scrii textul complet \
-al unui buletin de dimineață de aproximativ 13 minute, gata de citit cu voce tare \
-la viteză normală (aproximativ 170 cuvinte pe minut).
-
-LUNGIME OBLIGATORIE — ȚINTE CONCRETE PE SECȚIUNE:
-Trebuie să atingi AL NU MAI PUȚIN DE 2200 de cuvinte în total. Repartizarea țintă:
-  - Intro + meteo: ~200 cuvinte
-  - Politică locală Caraș-Severin/Reșița: ~400 cuvinte (dezvoltă fiecare știre cu \
-    detalii, nu doar enumera titluri)
-  - Politică națională România: ~500 cuvinte
-  - Politică internațională: ~400 cuvinte
-  - Fotbal România (scoruri ieri, clasament, meciuri azi dacă sunt menționate): ~400 cuvinte
-  - Fotbal european + cupe (scoruri, rezultate, meciuri viitoare dacă sunt menționate): ~500 cuvinte
-  - Outro: ~50 cuvinte
-TOTAL MINIM: 2200 cuvinte. Peste 2500 este acceptabil. Sub 2000 înseamnă că ai scurtat \
-prea mult și trebuie să dezvolți mai larg.
-
-Strategii pentru atingerea lungimii:
-- Pentru fiecare știre, include context: cine, ce, unde, când, de ce, implicații.
-- Folosește tranziții naturale între secțiuni („Trecem acum la...", „În privința...").
-- Dezvoltă cu detalii prezente în input (nume, cifre, reacții, citate).
-- Dacă o categorie are puține știri, acordă mai mult spațiu celor existente — NU scurta buletinul.
+al unui buletin de dimineață de aproximativ 13 minute, gata de citit cu voce tare.
 
 REGULI STRICTE:
 1. Folosește EXCLUSIV informațiile din textele de input primite de la utilizator. \
    Nu inventa știri, nume, cifre sau detalii care nu apar explicit în input.
-2. Dacă o secțiune nu are deloc știri în input, menționează scurt acest fapt \
-   („Din fotbalul internațional, astăzi nu avem meciuri importante de raportat.") \
-   și compensează cu 50-100 cuvinte suplimentare la secțiunea cea mai bogată.
+2. Dacă o secțiune nu are știri, spune scurt și treci mai departe.
 3. Ton neutru, calm, profesionist — ca un prezentator de radio matinal.
 4. Propoziții scurte și clare, ușor de urmărit la ascultare.
-5. Fără anglicisme dacă există echivalent românesc (scrie „antrenor", nu „coach").
-6. Scrie anii în cuvinte pentru TTS natural: 2026 → „două mii douăzeci și șase".
-7. Scrie numerele mici în cuvinte ("trei goluri"), dar scorurile le păstrezi cu cifre \
-   („a câștigat cu 2-1").
-8. ÎNAINTE DE A ÎNCHEIA verifică mental: am cel puțin 2200 de cuvinte? Dacă nu, \
-   întoarce-te și dezvoltă secțiunile cu cel mai mult material disponibil.
-
-STRUCTURA BULETINULUI (ordinea obligatorie):
-1. Intro: "Bună dimineața, tată. Astăzi este [ziua], [data]. Iată buletinul de știri."
-2. Meteo Reșița — temperatură curentă, min/max ziua, precipitații, vânt.
-3. Politică locală Caraș-Severin / Reșița.
-4. Politică națională România.
-5. Politică internațională.
-6. Fotbal România — SuperLiga, naționala.
-7. Fotbal — Big 5 (Premier League, La Liga, Bundesliga, Serie A, Ligue 1).
-8. Fotbal — cupe europene (Champions League, Europa League, Conference League).
-9. Fotbal — turnee internaționale (World Cup / EURO) — DOAR dacă apar în input, altfel omite.
-10. Outro: "Acesta a fost buletinul de astăzi. O zi bună!"
-
-Output: strict textul buletinului, fără titluri de secțiuni scrise, fără paranteze \
-explicative, fără markdown. Doar textul curat, ca și cum ar fi citit la microfon.
+5. Fără anglicisme dacă există echivalent românesc.
+6. Scrie anii și numerele în cuvinte pentru TTS natural (excepție: scorurile rămân \
+   cu cifre, de exemplu „a câștigat cu 2-1").
 """
 
 CATEGORY_HEADERS = {
@@ -124,5 +90,176 @@ def build_user_prompt(
         parts.append("")
     parts.append(
         "Scrie acum textul complet al buletinului, respectând toate regulile din mesajul de sistem."
+    )
+    return "\n".join(parts)
+
+
+# ----------------------------------------------------------------------------
+# Per-section configuration (production path).
+# Each section is generated in its own API call with a specific word target.
+# This gives us reliable control over total bulletin length.
+# ----------------------------------------------------------------------------
+
+SECTION_SYSTEM_PROMPT = """\
+Ești un redactor de știri radio în limba română. Scrii o SECȚIUNE dintr-un \
+buletin de dimineață care va fi citit cu voce tare.
+
+REGULI STRICTE:
+1. Folosește EXCLUSIV informațiile din inputul utilizatorului. Nu inventa \
+   nimic (știri, nume, cifre, citate, ore).
+2. Ton neutru, calm, profesionist — prezentator de radio matinal.
+3. Propoziții scurte și clare, ușor de urmărit la ascultare.
+4. Fără anglicisme dacă există echivalent românesc („antrenor", nu „coach").
+5. Scrie anii ȘI numerele în cuvinte pentru TTS natural: \
+   „două mii douăzeci și șase", „opt virgulă unu grade", „treizeci și șase de ani". \
+   Excepție: scorurile sportive rămân cu cifre („2-1", „4-2").
+6. Nu scrie titluri de secțiuni, nu folosi markdown, nu lăsa paranteze explicative. \
+   Doar proză curată, gata de citit la microfon.
+
+OBLIGATORIU — LUNGIME:
+Secțiunea TREBUIE să aibă AL NU MAI PUȚIN DE {min_words} cuvinte. Ideal \
+{target_words} cuvinte. Dacă ai puține elemente în input, dezvoltă fiecare \
+cu context, nume, cifre, reacții, implicații.
+"""
+
+
+@dataclass(frozen=True)
+class Section:
+    key: str
+    intro_phrase: str       # e.g. "Trecem acum la politica națională."
+    target_words: int
+    min_words: int
+    guidance: str           # Extra instructions specific to this section
+
+
+SECTIONS: list[Section] = [
+    Section(
+        key="meteo",
+        intro_phrase="Începem cu prognoza meteo pentru Reșița.",
+        target_words=180,
+        min_words=130,
+        guidance=(
+            "Citește prognoza pentru Reșița. Menționează temperatura curentă, "
+            "minima și maxima ziua, starea cerului, vântul și precipitațiile. "
+            "Spune-o ca un prezentator — nu înșira doar cifre, adaugă o scurtă "
+            "recomandare practică (umbrelă, haine groase, etc.) dacă e cazul. "
+            "Scrie TOATE valorile numerice în cuvinte (ex: „opt virgulă unu grade”)."
+        ),
+    ),
+    Section(
+        key="local_politics",
+        intro_phrase="Trecem la știrile locale din Reșița și Caraș-Severin.",
+        target_words=400,
+        min_words=320,
+        guidance=(
+            "Prezintă toate știrile locale. Pentru fiecare, dezvoltă cu context: "
+            "cine, ce, unde, când, de ce, cum. Include detalii din input (nume, "
+            "vârste, străzi, cifre). Folosește tranziții naturale între știri "
+            "(„În altă ordine de idei”, „Tot în această zonă”, „De asemenea”)."
+        ),
+    ),
+    Section(
+        key="national_politics",
+        intro_phrase="Pe plan național, iată ce s-a întâmplat.",
+        target_words=500,
+        min_words=400,
+        guidance=(
+            "Prezintă știrile politice și de interes național. Dezvoltă fiecare "
+            "știre: protagoniști, poziții, reacții, implicații. Menționează numele "
+            "și funcțiile complete (premier, ministru, lider partid). Folosește "
+            "tranziții naturale între știri."
+        ),
+    ),
+    Section(
+        key="international_politics",
+        intro_phrase="Pe plan internațional, principalele evenimente.",
+        target_words=400,
+        min_words=320,
+        guidance=(
+            "Prezintă știrile internaționale prezente în input. Pentru fiecare, "
+            "oferă context geografic și uman: țara, liderii, cauza, consecințele. "
+            "Nu presupune cunoștințe pe care ascultătorul poate nu le are."
+        ),
+    ),
+    Section(
+        key="football_ro",
+        intro_phrase="Trecem la fotbalul românesc.",
+        target_words=400,
+        min_words=320,
+        guidance=(
+            "Prezintă rezultatele recente și știrile din SuperLiga României și "
+            "de la echipa națională. Pentru meciuri, dă scorul, marcatorii (dacă "
+            "sunt menționați), momentul cheie, și implicația în clasament. "
+            "Pentru transferuri sau declarații, dezvoltă cu context. Dacă în "
+            "input sunt preview-uri pentru meciuri de azi, menționează-le clar "
+            "cu formula „astăzi se joacă” sau „în această după-amiază joacă”."
+        ),
+    ),
+    Section(
+        key="football_eu",
+        intro_phrase="În fotbalul european, rezumăm etapa.",
+        target_words=450,
+        min_words=360,
+        guidance=(
+            "Prezintă rezultatele și știrile din Premier League, La Liga, "
+            "Bundesliga, Serie A, Ligue 1, Champions League, Europa League și "
+            "Conference League. Grupează pe campionate. Pentru fiecare meci, "
+            "dă scorul și o frază de context (cine a marcat, cum e în clasament). "
+            "Dacă input-ul menționează meciuri de azi, spune-le clar."
+        ),
+    ),
+]
+
+
+def build_intro(bulletin_date: datetime) -> str:
+    """Hardcoded intro — deterministic, no API call needed."""
+    return (
+        f"Bună dimineața, tată. Astăzi este {format_date_ro(bulletin_date)}. "
+        "Iată buletinul de știri."
+    )
+
+
+OUTRO = "Acesta a fost buletinul de astăzi. O zi bună!"
+
+
+def build_section_system_prompt(section: Section) -> str:
+    return SECTION_SYSTEM_PROMPT.format(
+        target_words=section.target_words,
+        min_words=section.min_words,
+    )
+
+
+def build_section_user_prompt(
+    *,
+    section: Section,
+    items: List[NewsItem],
+    weather: Optional[WeatherReport],
+    bulletin_date: datetime,
+) -> str:
+    """Build the user-role prompt for one section's API call."""
+    parts = [
+        f"DATA BULETINULUI: {format_date_ro(bulletin_date)}",
+        f"SECȚIUNEA CURENTĂ: {section.key}",
+        f"ȚINTA DE LUNGIME: {section.target_words} cuvinte (minim {section.min_words}).",
+        "",
+        "INSTRUCȚIUNI SPECIFICE:",
+        section.guidance,
+        "",
+    ]
+
+    if section.key == "meteo":
+        parts.append("DATE DE INPUT:")
+        parts.append(_format_weather_block(weather))
+    else:
+        # News section — include the matching category
+        cat_items = [it for it in items if it.category == section.key]
+        parts.append(f"DATE DE INPUT ({CATEGORY_HEADERS.get(section.key, section.key)}):")
+        parts.append(_format_items_block(cat_items))
+
+    parts.append("")
+    parts.append(
+        f"Scrie ACUM textul secțiunii „{section.key}”, fără titlu, fără paranteze, "
+        f"doar proza pentru microfon. Începe cu fraza de tranziție: "
+        f"„{section.intro_phrase}”."
     )
     return "\n".join(parts)

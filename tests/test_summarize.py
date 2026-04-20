@@ -4,7 +4,13 @@ from unittest.mock import MagicMock
 import pytest
 
 from generator.models import NewsItem, WeatherReport
-from generator.prompt import build_user_prompt, SYSTEM_PROMPT
+from generator.prompt import (
+    OUTRO,
+    SECTIONS,
+    SYSTEM_PROMPT,
+    build_intro,
+    build_user_prompt,
+)
 from generator.summarize import summarize
 
 
@@ -70,11 +76,15 @@ def test_user_prompt_marks_missing_weather_explicitly():
     assert "METEO INDISPONIBIL" in prompt or "meteo indisponibil" in prompt.lower()
 
 
-def test_summarize_calls_openai_and_returns_text():
+def test_summarize_calls_openai_per_section_and_concatenates():
+    """summarize() makes one API call per section, stitches intro + sections + outro."""
     fake_client = MagicMock()
-    fake_client.chat.completions.create.return_value = MagicMock(
-        choices=[MagicMock(message=MagicMock(content="Bună dimineața. (buletin)"))]
-    )
+    # Return a unique string per call so we can verify concatenation order
+    responses = iter([
+        MagicMock(choices=[MagicMock(message=MagicMock(content=f"SECTION_{i}_TEXT"))])
+        for i in range(len(SECTIONS))
+    ])
+    fake_client.chat.completions.create.side_effect = lambda **kw: next(responses)
 
     text = summarize(
         items=_sample_items(),
@@ -84,27 +94,79 @@ def test_summarize_calls_openai_and_returns_text():
         model="gpt-4o-mini",
     )
 
-    assert text == "Bună dimineața. (buletin)"
-    call_kwargs = fake_client.chat.completions.create.call_args.kwargs
-    assert call_kwargs["model"] == "gpt-4o-mini"
-    assert len(call_kwargs["messages"]) == 2
-    assert call_kwargs["messages"][0]["role"] == "system"
-    assert call_kwargs["messages"][1]["role"] == "user"
+    # One call per section
+    assert fake_client.chat.completions.create.call_count == len(SECTIONS)
+
+    # Bulletin contains hardcoded intro, all sections, and outro in order
+    intro = build_intro(datetime(2026, 4, 19, 6, 0, tzinfo=timezone.utc))
+    assert text.startswith(intro)
+    assert text.endswith(OUTRO)
+    for i in range(len(SECTIONS)):
+        assert f"SECTION_{i}_TEXT" in text
+
+    # Each call has system + user messages with the requested model
+    for call in fake_client.chat.completions.create.call_args_list:
+        kwargs = call.kwargs
+        assert kwargs["model"] == "gpt-4o-mini"
+        assert len(kwargs["messages"]) == 2
+        assert kwargs["messages"][0]["role"] == "system"
+        assert kwargs["messages"][1]["role"] == "user"
 
 
-def test_summarize_retries_then_raises():
+def test_summarize_falls_back_when_section_permanently_fails():
+    """A section that exhausts retries is replaced by a fallback line, not a crash."""
     fake_client = MagicMock()
     fake_client.chat.completions.create.side_effect = RuntimeError("boom")
 
-    with pytest.raises(RuntimeError):
-        summarize(
-            items=_sample_items(),
-            weather=_sample_weather(),
-            bulletin_date=datetime(2026, 4, 19, 6, 0, tzinfo=timezone.utc),
-            client=fake_client,
-            model="gpt-4o-mini",
-            max_retries=2,
-            retry_sleep=0.0,
+    text = summarize(
+        items=_sample_items(),
+        weather=_sample_weather(),
+        bulletin_date=datetime(2026, 4, 19, 6, 0, tzinfo=timezone.utc),
+        client=fake_client,
+        model="gpt-4o-mini",
+        max_retries=2,
+        retry_sleep=0.0,
+    )
+
+    # Each section attempts 1 + max_retries = 3 times
+    expected_calls = len(SECTIONS) * 3
+    assert fake_client.chat.completions.create.call_count == expected_calls
+
+    # Bulletin still returns intro + outro, with fallback text in between
+    intro = build_intro(datetime(2026, 4, 19, 6, 0, tzinfo=timezone.utc))
+    assert text.startswith(intro)
+    assert text.endswith(OUTRO)
+    assert "nu avem informații" in text.lower() or "trecem mai departe" in text.lower()
+
+
+def test_summarize_retries_transient_failure_then_succeeds():
+    """A section that fails twice then succeeds on the third try should still return real content."""
+    fake_client = MagicMock()
+
+    call_count = {"n": 0}
+
+    def flaky(**kwargs):
+        call_count["n"] += 1
+        # Fail the first two calls overall, then succeed for every call after
+        if call_count["n"] <= 2:
+            raise RuntimeError("transient")
+        return MagicMock(
+            choices=[MagicMock(message=MagicMock(content="RECOVERED"))]
         )
-    # Called 3 times total (1 initial + 2 retries)
-    assert fake_client.chat.completions.create.call_count == 3
+
+    fake_client.chat.completions.create.side_effect = flaky
+
+    text = summarize(
+        items=_sample_items(),
+        weather=_sample_weather(),
+        bulletin_date=datetime(2026, 4, 19, 6, 0, tzinfo=timezone.utc),
+        client=fake_client,
+        model="gpt-4o-mini",
+        max_retries=2,
+        retry_sleep=0.0,
+    )
+
+    # First section recovers after 2 retries; subsequent sections succeed on first try
+    # Total calls: 3 (first section: 2 fails + 1 success) + (len(SECTIONS) - 1) successes
+    assert fake_client.chat.completions.create.call_count == 3 + (len(SECTIONS) - 1)
+    assert "RECOVERED" in text
