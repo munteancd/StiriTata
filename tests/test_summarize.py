@@ -198,6 +198,17 @@ def test_strip_wrap_up_preserves_meteo_closing():
     assert "umbrelă" in out
 
 
+def test_strip_wrap_up_removes_aceste_premii_subliniaza():
+    """The looser 'Aceste [noun] [verb]' pattern catches premii/distinctii/etc."""
+    text = (
+        "Frank Lampard a fost desemnat antrenorul sezonului. "
+        "Aceste premii subliniază performanțele remarcabile ale celor doi."
+    )
+    out = _strip_trailing_wrap_up(text, section_key="football_eu")
+    assert "subliniază" not in out
+    assert "Lampard" in out
+
+
 def test_strip_wrap_up_removes_inline_in_concluzie():
     """Model sometimes glues the wrap-up onto the last news sentence, no \\n\\n."""
     text = (

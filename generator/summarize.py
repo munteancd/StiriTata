@@ -35,11 +35,15 @@ _WRAP_UP_PATTERNS = [
     r"^acesta\s+a\s+fost\b",
     r"^în\s+concluzie\b",
     r"^în\s+rezumat\b",
-    r"^în\s+final,\s+(săptămâna|ziua|această)",
-    r"^aceste\s+rezultate\s+(subliniază|arată|reflectă)",
-    r"^aceste\s+evenimente\s+(subliniază|arată|reflectă)",
+    r"^în\s+final,\s+(săptămâna|ziua|această|fotbalul|sportul)",
+    # "Aceste [anything] (subliniază|arată|reflectă|...)" — generalizes the
+    # filler "Aceste rezultate/evenimente/premii subliniază performanțele..."
+    r"^aceste\s+\S+\s+(subliniază|arată|reflectă|reprezintă|demonstrează|evidențiază|pun|marchează)\b",
+    r"^aceasta\s+(subliniază|arată|reflectă|demonstrează|evidențiază)\b",
     r"^rămâne\s+de\s+văzut\b",
     r"^rămânem\s+atenți\b",
+    r"^vom\s+urmări\b",
+    r"^așteptăm\s+cu\s+interes\b",
 ]
 _WRAP_UP_REGEX = re.compile(
     "(" + "|".join(_WRAP_UP_PATTERNS) + ")",
