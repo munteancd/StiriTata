@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from typing import Any, List, Optional
 
-from .models import NewsItem, WeatherReport
+from .models import HistoryCandidates, NewsItem, WeatherReport
 from .prompt import (
     OUTRO,
     SECTIONS,
@@ -90,6 +90,7 @@ def _call_section(
     section: Section,
     items: List[NewsItem],
     weather: Optional[WeatherReport],
+    history: Optional[HistoryCandidates],
     bulletin_date: datetime,
     client: Any,
     model: str,
@@ -97,12 +98,20 @@ def _call_section(
     retry_sleep: float,
 ) -> str:
     """Generate the text for a single bulletin section via one OpenAI call."""
+    # Short-circuit: if this is the history section but we have no candidates,
+    # skip the API call entirely and use the fallback. Saves ~$0.01 and avoids
+    # sending the model an empty candidate list that would yield "no info available".
+    if section.key == "history" and history is None:
+        log.info("section history: no candidates, using fallback without API call")
+        return _SECTION_FALLBACK
+
     system_prompt = build_section_system_prompt(section)
     user_prompt = build_section_user_prompt(
         section=section,
         items=items,
         weather=weather,
         bulletin_date=bulletin_date,
+        history=history,
     )
     messages = [
         {"role": "system", "content": system_prompt},
@@ -157,6 +166,7 @@ def summarize(
     max_retries: int = 2,
     retry_sleep: float = 2.0,
     max_section_failures: int = 2,
+    history: Optional[HistoryCandidates] = None,
 ) -> str:
     """Generate the full bulletin text by calling the API once per section.
 
@@ -180,6 +190,7 @@ def summarize(
             section=section,
             items=items,
             weather=weather,
+            history=history,
             bulletin_date=bulletin_date,
             client=client,
             model=model,

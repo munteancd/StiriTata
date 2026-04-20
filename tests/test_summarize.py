@@ -108,6 +108,7 @@ def test_summarize_calls_openai_per_section_and_concatenates():
         bulletin_date=datetime(2026, 4, 19, 6, 0, tzinfo=timezone.utc),
         client=fake_client,
         model="gpt-4o-mini",
+        history=_sample_history(),
     )
 
     # One call per section
@@ -146,6 +147,7 @@ def test_summarize_raises_when_too_many_sections_fail():
             model="gpt-4o-mini",
             max_retries=2,
             retry_sleep=0.0,
+            history=_sample_history(),
         )
 
 
@@ -174,6 +176,7 @@ def test_summarize_tolerates_a_couple_section_failures():
         max_retries=2,
         retry_sleep=0.0,
         max_section_failures=2,
+        history=_sample_history(),
     )
 
     intro = build_intro(datetime(2026, 4, 19, 6, 0, tzinfo=timezone.utc))
@@ -271,6 +274,7 @@ def test_summarize_retries_transient_failure_then_succeeds():
         model="gpt-4o-mini",
         max_retries=2,
         retry_sleep=0.0,
+        history=_sample_history(),
     )
 
     # First section recovers after 2 retries; subsequent sections succeed on first try
@@ -318,3 +322,50 @@ def test_build_section_user_prompt_for_non_history_ignores_history_kwarg():
     # History content should not leak into a non-history section
     assert "Stoker" not in prompt
     assert "Turilli" not in prompt
+
+
+def test_summarize_history_none_short_circuits_to_fallback_without_api_call():
+    """When history is None, the history section uses fallback text and does NOT call OpenAI."""
+    fake_client = MagicMock()
+    fake_client.chat.completions.create.return_value = MagicMock(
+        choices=[MagicMock(message=MagicMock(content="OK"))]
+    )
+
+    text = summarize(
+        items=_sample_items(),
+        weather=_sample_weather(),
+        bulletin_date=datetime(2026, 4, 19, 6, 0, tzinfo=timezone.utc),
+        client=fake_client,
+        model="gpt-4o-mini",
+        history=None,
+    )
+
+    # One fewer call than sections — history was short-circuited
+    assert fake_client.chat.completions.create.call_count == len(SECTIONS) - 1
+    # Fallback line present for the history slot
+    assert "nu avem informații" in text.lower()
+
+
+def test_summarize_history_passed_reaches_api_call():
+    """When history is provided, the history section does call OpenAI and its content ends up in the prompt."""
+    fake_client = MagicMock()
+    fake_client.chat.completions.create.return_value = MagicMock(
+        choices=[MagicMock(message=MagicMock(content="OK"))]
+    )
+
+    summarize(
+        items=_sample_items(),
+        weather=_sample_weather(),
+        bulletin_date=datetime(2026, 4, 19, 6, 0, tzinfo=timezone.utc),
+        client=fake_client,
+        model="gpt-4o-mini",
+        history=_sample_history(),
+    )
+
+    assert fake_client.chat.completions.create.call_count == len(SECTIONS)
+    # At least one call's user prompt mentions our sample history item
+    user_prompts = [
+        call.kwargs["messages"][1]["content"]
+        for call in fake_client.chat.completions.create.call_args_list
+    ]
+    assert any("Berlinul" in p for p in user_prompts)
