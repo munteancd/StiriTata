@@ -86,7 +86,7 @@
     const raw = safeGet(positionKey(currentBulletinDate));
     if (raw === null) return;
     const pos = parseFloat(raw);
-    if (!Number.isFinite(pos) || pos <= POSITION_MIN_SECONDS) return;
+    if (!Number.isFinite(pos) || pos < POSITION_MIN_SECONDS) return;
 
     const applyWhenReady = () => {
       const dur = audio.duration;

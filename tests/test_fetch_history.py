@@ -95,12 +95,16 @@ async def test_fetch_history_returns_none_when_both_fail():
 
 
 @respx.mock
-async def test_fetch_history_returns_none_when_ro_fails_and_en_fails():
-    # RO returns thin result → fallback triggered; EN fails → overall return is what RO had
-    # but caller doesn't need EN to succeed if RO had anything — we return RO even when thin
-    # (LLM gets fewer candidates but still some). We only return None if RO itself failed
+async def test_fetch_history_returns_ro_when_ro_thin_and_en_fails():
+    # RO returns thin result (< 3 total) → EN fallback is triggered; EN fails (500).
+    # We still return the thin RO candidates rather than None, because SOMETHING is
+    # better than nothing for the LLM prompt. We only return None if RO itself failed
     # hard AND EN also failed.
-    respx.get(_ro_url(4, 20)).mock(return_value=httpx.Response(500))
+    ro_thin = json.loads((FIXTURES / "history_response_ro_thin.json").read_text(encoding="utf-8"))
+    respx.get(_ro_url(4, 20)).mock(return_value=httpx.Response(200, json=ro_thin))
     respx.get(_en_url(4, 20)).mock(return_value=httpx.Response(500))
     cands = await fetch_history(month=4, day=20)
-    assert cands is None
+    assert cands is not None
+    total = len(cands.events) + len(cands.births) + len(cands.deaths)
+    assert total < 3  # the whole point: thin result preserved
+    assert all(it.source_lang == "ro" for it in cands.events)
