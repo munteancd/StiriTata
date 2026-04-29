@@ -33,6 +33,14 @@ def _sample_items() -> list[NewsItem]:
             category="football_ro",
             published=datetime(2026, 4, 19, 9, 0, tzinfo=timezone.utc),
         ),
+        NewsItem(
+            title="Noi atacuri asupra infrastructurii din Ucraina",
+            summary="Autoritățile ucrainene spun că mai multe regiuni au fost vizate.",
+            url="https://a.ro/3",
+            source="The Guardian Ukraine",
+            category="ukraine_war",
+            published=datetime(2026, 4, 19, 10, 0, tzinfo=timezone.utc),
+        ),
     ]
 
 
@@ -289,6 +297,27 @@ def test_history_section_is_last_before_outro():
     assert keys[-1] == "history"
     assert "football_eu" in keys
     assert keys.index("football_eu") == keys.index("history") - 1
+
+
+def test_ukraine_war_section_sits_after_local_news():
+    keys = [s.key for s in SECTIONS]
+    assert keys.index("ukraine_war") == keys.index("local_politics") + 1
+    assert keys.index("ukraine_war") < keys.index("national_politics")
+
+
+def test_build_section_user_prompt_for_ukraine_war_includes_only_ukraine_items():
+    ukraine_section = next(s for s in SECTIONS if s.key == "ukraine_war")
+    prompt = build_section_user_prompt(
+        section=ukraine_section,
+        items=_sample_items(),
+        weather=None,
+        bulletin_date=datetime(2026, 4, 20, 6, 0, tzinfo=timezone.utc),
+        history=_sample_history(),
+    )
+    assert "RĂZBOIUL DIN UCRAINA" in prompt
+    assert "Noi atacuri asupra infrastructurii" in prompt
+    assert "Guvernul" not in prompt
+    assert "Rapid" not in prompt
 
 
 def test_build_section_user_prompt_for_history_includes_candidates():

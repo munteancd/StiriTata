@@ -28,6 +28,7 @@ REGULI STRICTE:
 
 CATEGORY_HEADERS = {
     "local_politics": "POLITICĂ LOCALĂ (REȘIȚA / CARAȘ-SEVERIN)",
+    "ukraine_war": "RĂZBOIUL DIN UCRAINA",
     "national_politics": "POLITICĂ NAȚIONALĂ",
     "international_politics": "POLITICĂ INTERNAȚIONALĂ",
     "football_ro": "FOTBAL ROMÂNIA",
@@ -36,6 +37,7 @@ CATEGORY_HEADERS = {
 
 CATEGORY_ORDER = [
     "local_politics",
+    "ukraine_war",
     "national_politics",
     "international_politics",
     "football_ro",
@@ -238,6 +240,23 @@ SECTIONS: list[Section] = [
             "cine, ce, unde, când, de ce, cum. Include detalii din input (nume, "
             "vârste, străzi, cifre). Folosește tranziții naturale între știri "
             "(„În altă ordine de idei”, „Tot în această zonă”, „De asemenea”)."
+        ),
+    ),
+    Section(
+        key="ukraine_war",
+        intro_phrase="După știrile locale, mergem la evoluțiile din războiul din Ucraina.",
+        target_words=300,
+        min_words=240,
+        guidance=(
+            "Scrie o secțiune de aproximativ două minute despre războiul din Ucraina. "
+            "Prioritizează evoluțiile militare, atacurile asupra civililor sau infrastructurii, "
+            "deciziile diplomatice și ajutorul occidental, doar dacă apar explicit în input. "
+            "Păstrează tonul sobru și neutru: nu folosi limbaj propagandistic, nu transforma "
+            "secțiunea în comentariu politic și nu prezenta estimări neverificate ca fapte. "
+            "Când sursele diferă sau informația este atribuită unei părți, spune clar "
+            "„potrivit sursei citate”, „autoritățile ucrainene spun” sau formulări similare. "
+            "Explică pe scurt de ce contează știrea pentru ascultător, dar nu adăuga concluzii "
+            "generale la final."
         ),
     ),
     Section(

@@ -7,6 +7,14 @@ local_politics:
   - name: Banatul Montan
     url: https://banatulmontan.ro/feed/
 
+ukraine_war:
+  - name: The Guardian Ukraine
+    url: https://www.theguardian.com/world/ukraine/rss
+  - name: Ukrinform War
+    url: https://www.ukrinform.net/rss/rubric-ato
+  - name: Euromaidan Press
+    url: https://euromaidanpress.com/feed/
+
 national_politics:
   - name: Digi24
     url: https://www.digi24.ro/rss
