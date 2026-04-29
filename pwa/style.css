@@ -110,6 +110,40 @@ body {
   margin: 0 6px;
 }
 
+.chapters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.chapter-btn {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--progress-bg);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--fg);
+  font-size: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.chapter-btn:active,
+.chapter-btn--active {
+  border-color: var(--accent);
+  background: rgba(235, 70, 55, 0.16);
+}
+
+.chapter-btn__time {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .seek-buttons {
   display: flex;
   gap: 16px;

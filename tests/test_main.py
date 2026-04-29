@@ -69,6 +69,8 @@ async def test_pipeline_writes_mp3_and_manifest(tmp_path: Path):
     manifest = json.loads((public / "latest.json").read_text())
     assert manifest["date"] == "2026-04-19"
     assert manifest["duration_seconds"] == 600.0
+    assert manifest["chapters"][0]["key"] == "meteo"
+    assert any(chapter["key"] == "ukraine_war" for chapter in manifest["chapters"])
     # Archive copy present
     assert (archive / "2026-04-19.mp3").exists()
 

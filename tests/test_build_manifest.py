@@ -28,3 +28,16 @@ def test_manifest_is_json_serializable():
     )
     s = json.dumps(manifest)
     assert "2026-04-19" in s
+
+
+def test_manifest_includes_chapters_when_provided():
+    date = datetime(2026, 4, 19, 6, 0, tzinfo=timezone.utc)
+    chapters = [{"key": "meteo", "title": "Meteo", "start_seconds": 0}]
+    manifest = build_manifest(
+        date=date,
+        duration_seconds=900.0,
+        audio_url="latest.mp3",
+        generated_at=datetime(2026, 4, 19, 6, 3, tzinfo=timezone.utc),
+        chapters=chapters,
+    )
+    assert manifest["chapters"] == chapters

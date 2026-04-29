@@ -16,6 +16,7 @@
   const seekBack = document.getElementById("seek-back");
   const seekFwd = document.getElementById("seek-fwd");
   const statusEl = document.getElementById("status");
+  const chaptersEl = document.getElementById("chapters");
 
   let wakeLock = null;
 
@@ -28,6 +29,7 @@
 
   let currentBulletinDate = null; // ISO YYYY-MM-DD from manifest
   let lastSavedAt = 0;
+  let chapters = [];
 
   function positionKey(date) {
     return POSITION_KEY_PREFIX + date;
@@ -156,6 +158,57 @@
     audio.currentTime = target;
   }
 
+  function seekTo(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return;
+    const dur = audio.duration || seconds;
+    audio.currentTime = Math.max(0, Math.min(dur, seconds));
+  }
+
+  function renderChapters(rawChapters) {
+    chapters = Array.isArray(rawChapters)
+      ? rawChapters
+          .filter((chapter) => chapter && Number.isFinite(Number(chapter.start_seconds)))
+          .map((chapter) => ({
+            key: String(chapter.key || chapter.title || ""),
+            title: String(chapter.title || chapter.key || "Capitol"),
+            start: Number(chapter.start_seconds),
+          }))
+          .sort((a, b) => a.start - b.start)
+      : [];
+
+    if (!chaptersEl || chapters.length === 0) return;
+    chaptersEl.textContent = "";
+    chapters.forEach((chapter, index) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chapter-btn";
+      btn.dataset.chapterIndex = String(index);
+      btn.setAttribute("aria-label", `Sari la ${chapter.title}, ${formatTime(chapter.start)}`);
+      btn.innerHTML = `${chapter.title}<span class="chapter-btn__time">${formatTime(chapter.start)}</span>`;
+      btn.addEventListener("click", () => seekTo(chapter.start));
+      chaptersEl.appendChild(btn);
+    });
+    chaptersEl.hidden = false;
+    updateActiveChapter();
+  }
+
+  function updateActiveChapter() {
+    if (!chaptersEl || chapters.length === 0) return;
+    const cur = audio.currentTime || 0;
+    let activeIndex = 0;
+    for (let i = 0; i < chapters.length; i++) {
+      if (chapters[i].start <= cur + 1) activeIndex = i;
+    }
+    chaptersEl.querySelectorAll(".chapter-btn").forEach((btn, index) => {
+      btn.classList.toggle("chapter-btn--active", index === activeIndex);
+      if (index === activeIndex) {
+        btn.setAttribute("aria-current", "true");
+      } else {
+        btn.removeAttribute("aria-current");
+      }
+    });
+  }
+
   async function loadManifestAndAudio() {
     statusEl.textContent = "";
     try {
@@ -174,6 +227,7 @@
       if (Number.isFinite(manifest.duration_seconds)) {
         timeTotal.textContent = formatTime(manifest.duration_seconds);
       }
+      renderChapters(manifest.chapters);
     } catch (err) {
       // Offline / server down: fall back to whatever the SW has cached.
       statusEl.textContent = "Folosim buletinul salvat local.";
@@ -225,6 +279,7 @@
     if (dur > 0) {
       progressBar.style.width = `${(cur / dur) * 100}%`;
     }
+    updateActiveChapter();
     // Throttled save for crash recovery (battery dead, app killed, etc.)
     const now = Date.now();
     if (!audio.paused && now - lastSavedAt > POSITION_SAVE_THROTTLE_MS) {

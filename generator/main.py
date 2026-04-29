@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import json
 import logging
+import math
 import os
 import shutil
 from collections import defaultdict
@@ -17,6 +18,7 @@ from .fetch_news import fetch_all_sources
 from .fetch_weather import fetch_weather
 from .fetch_history import fetch_history
 from .models import NewsItem
+from .prompt import SECTIONS
 from .summarize import summarize
 from .tts import PiperConfig, synthesize
 
@@ -28,6 +30,17 @@ log = logging.getLogger(__name__)
 # More items per category = more material for ChatGPT to expand the bulletin with.
 DEFAULT_MAX_ITEMS_PER_CATEGORY = 12
 
+CHAPTER_TITLES = {
+    "meteo": "Meteo",
+    "local_politics": "Locale",
+    "ukraine_war": "Ucraina",
+    "national_politics": "Naționale",
+    "international_politics": "Internațional",
+    "football_ro": "Fotbal RO",
+    "football_eu": "Fotbal Europa",
+    "history": "Istorie",
+}
+
 
 def _cap_items_per_category(items: List[NewsItem], max_per_cat: int) -> List[NewsItem]:
     by_cat: "defaultdict[str, list[NewsItem]]" = defaultdict(list)
@@ -38,6 +51,22 @@ def _cap_items_per_category(items: List[NewsItem], max_per_cat: int) -> List[New
         cat_items.sort(key=lambda x: x.published, reverse=True)
         capped.extend(cat_items[:max_per_cat])
     return capped
+
+
+def _build_chapters(duration_seconds: float) -> list[dict[str, Any]]:
+    if not math.isfinite(duration_seconds) or duration_seconds <= 0:
+        return []
+    total_weight = sum(max(1, section.target_words) for section in SECTIONS)
+    cursor = 0
+    chapters: list[dict[str, Any]] = []
+    for section in SECTIONS:
+        chapters.append({
+            "key": section.key,
+            "title": CHAPTER_TITLES.get(section.key, section.key.replace("_", " ").title()),
+            "start_seconds": round((cursor / total_weight) * duration_seconds, 1),
+        })
+        cursor += max(1, section.target_words)
+    return chapters
 
 
 async def run_pipeline(
@@ -110,6 +139,7 @@ async def run_pipeline(
         duration_seconds=duration,
         audio_url="latest.mp3",
         generated_at=datetime.now(tz=timezone.utc),
+        chapters=_build_chapters(duration),
     )
     (public_dir / "latest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2),

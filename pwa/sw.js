@@ -3,7 +3,7 @@
 // - AUDIO (latest.mp3): stale-while-revalidate keyed by manifest date.
 // - MANIFEST (latest.json): network-first with cache fallback.
 
-const SHELL_CACHE = "stiritata-shell-v1";
+const SHELL_CACHE = "stiritata-shell-v2";
 const AUDIO_CACHE = "stiritata-audio-v1";
 
 const SHELL_ASSETS = [
