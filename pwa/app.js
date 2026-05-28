@@ -77,6 +77,7 @@
 
         audio.addEventListener("loadedmetadata", () => {
           audio.currentTime = Math.min(pos, audio.duration || 0);
+          audio.playbackRate = speeds[speedIdx];
           if (wasPlaying) audio.play().catch(() => {});
         }, { once: true });
 
