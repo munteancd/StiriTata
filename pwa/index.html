@@ -10,8 +10,21 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="theme-default">
   <main class="app">
+    <div class="controls-top">
+      <button id="speed-btn" class="speed-btn" type="button" aria-label="Viteză redare">1×</button>
+      <button id="voice-btn" class="voice-btn" type="button" aria-label="Alege vocea" hidden>🎙</button>
+    </div>
+
+    <!-- Voice picker panel -->
+    <div id="voice-panel" class="voice-panel" hidden role="dialog" aria-label="Selectare voce">
+      <p class="voice-panel__title">Voce narator</p>
+      <div id="voice-options" class="voice-options">
+        <!-- populated by app.js -->
+      </div>
+    </div>
+
     <h1 class="app__title">Știri Tată</h1>
     <p class="app__date" id="bulletin-date">Se încarcă…</p>
     <p class="resume-hint" id="resume-hint" aria-live="polite" hidden></p>
@@ -43,6 +56,13 @@
     </div>
 
     <p class="status" id="status" role="status" aria-live="polite"></p>
+
+    <div class="headlines-container" id="headlines-container" hidden>
+      <h2 class="headlines-title">În ediția de azi:</h2>
+      <ul class="headlines-list" id="headlines-list">
+        <!-- populated by app.js -->
+      </ul>
+    </div>
   </main>
 
   <audio id="audio" preload="auto"></audio>
