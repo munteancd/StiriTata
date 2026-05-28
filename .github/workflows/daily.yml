@@ -59,6 +59,7 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+          TTS_VOICES: alina,mihai,emil
         run: python -m generator.main --sources sources.yaml --public-dir public
 
       - name: Verify bulletin is present (allow fallback, fail if totally missing)
