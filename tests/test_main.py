@@ -47,9 +47,9 @@ async def test_pipeline_writes_mp3_and_manifest(tmp_path: Path):
     with patch("generator.main.fetch_all_sources", AsyncMock(return_value=_one_item())), \
          patch("generator.main.fetch_weather", AsyncMock(return_value=_wr())), \
          patch("generator.main.fetch_history", AsyncMock(return_value=None)), \
-         patch("generator.main.synthesize", return_value=600.0) as tts_mock:
+         patch("generator.main.synthesize_voice", return_value=600.0) as tts_mock:
         # Make synthesize actually create the MP3 file so later steps find it.
-        def _mk_mp3(*, text, out_mp3, config):
+        def _mk_mp3(*, text, out_mp3, voice):
             out_mp3.parent.mkdir(parents=True, exist_ok=True)
             out_mp3.write_bytes(b"ID3fakemp3")
             return 600.0
@@ -131,7 +131,7 @@ async def test_pipeline_trims_archive_to_last_7_days(tmp_path: Path):
         choices=[MagicMock(message=MagicMock(content="Buletin."))]
     )
 
-    def _mk_mp3(*, text, out_mp3, config):
+    def _mk_mp3(*, text, out_mp3, voice):
         out_mp3.parent.mkdir(parents=True, exist_ok=True)
         out_mp3.write_bytes(b"ID3")
         return 600.0
@@ -139,7 +139,7 @@ async def test_pipeline_trims_archive_to_last_7_days(tmp_path: Path):
     with patch("generator.main.fetch_all_sources", AsyncMock(return_value=_one_item())), \
          patch("generator.main.fetch_weather", AsyncMock(return_value=_wr())), \
          patch("generator.main.fetch_history", AsyncMock(return_value=None)), \
-         patch("generator.main.synthesize", side_effect=_mk_mp3):
+         patch("generator.main.synthesize_voice", side_effect=_mk_mp3):
         await run_pipeline(
             sources_cfg=sources_cfg,
             public_dir=public,
@@ -176,7 +176,7 @@ async def test_pipeline_passes_history_to_summarize(tmp_path: Path):
         deaths=[],
     )
 
-    def _mk_mp3(*, text, out_mp3, config):
+    def _mk_mp3(*, text, out_mp3, voice):
         out_mp3.parent.mkdir(parents=True, exist_ok=True)
         out_mp3.write_bytes(b"ID3")
         return 600.0
@@ -184,7 +184,7 @@ async def test_pipeline_passes_history_to_summarize(tmp_path: Path):
     with patch("generator.main.fetch_all_sources", AsyncMock(return_value=_one_item())), \
          patch("generator.main.fetch_weather", AsyncMock(return_value=_wr())), \
          patch("generator.main.fetch_history", AsyncMock(return_value=sample_history)) as hist_mock, \
-         patch("generator.main.synthesize", side_effect=_mk_mp3), \
+         patch("generator.main.synthesize_voice", side_effect=_mk_mp3), \
          patch("generator.main.summarize", return_value="Buletin.") as sum_mock:
         await run_pipeline(
             sources_cfg=sources_cfg,
@@ -200,3 +200,17 @@ async def test_pipeline_passes_history_to_summarize(tmp_path: Path):
     # summarize received our sample history
     _, kwargs = sum_mock.call_args
     assert kwargs["history"] is sample_history
+
+
+from generator.main import _resolve_voices
+
+
+def test_resolve_voices_keeps_known_and_drops_unknown():
+    voices = _resolve_voices(["alina", "bogus", "mihai"])
+    ids = [v.id for v in voices]
+    assert ids == ["alina", "mihai"]
+
+
+def test_resolve_voices_defaults_to_alina_when_all_unknown():
+    voices = _resolve_voices(["bogus"])
+    assert [v.id for v in voices] == ["alina"]
