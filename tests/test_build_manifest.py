@@ -41,3 +41,33 @@ def test_manifest_includes_chapters_when_provided():
         chapters=chapters,
     )
     assert manifest["chapters"] == chapters
+
+
+def test_manifest_includes_voices_and_headlines_when_provided():
+    date = datetime(2026, 5, 28, 6, 0, tzinfo=timezone.utc)
+    voices = [{"id": "alina", "label": "Alina", "gender": "female", "url": "latest-alina.mp3"}]
+    headlines = ["Titlu unu", "Titlu doi"]
+    manifest = build_manifest(
+        date=date,
+        duration_seconds=600.0,
+        audio_url="latest.mp3",
+        generated_at=datetime(2026, 5, 28, 6, 3, tzinfo=timezone.utc),
+        headlines=headlines,
+        weather_summary="cer senin",
+        voices=voices,
+    )
+    assert manifest["voices"] == voices
+    assert manifest["headlines"] == headlines
+    assert manifest["weather_summary"] == "cer senin"
+
+
+def test_manifest_omits_voices_when_not_provided():
+    date = datetime(2026, 5, 28, 6, 0, tzinfo=timezone.utc)
+    manifest = build_manifest(
+        date=date,
+        duration_seconds=600.0,
+        audio_url="latest.mp3",
+        generated_at=datetime(2026, 5, 28, 6, 3, tzinfo=timezone.utc),
+    )
+    assert "voices" not in manifest
+    assert "headlines" not in manifest
