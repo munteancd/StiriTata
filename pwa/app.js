@@ -17,8 +17,83 @@
   const seekFwd = document.getElementById("seek-fwd");
   const statusEl = document.getElementById("status");
   const chaptersEl = document.getElementById("chapters");
+  const speedBtn = document.getElementById("speed-btn");
+  const voiceBtn = document.getElementById("voice-btn");
+  const voicePanel = document.getElementById("voice-panel");
+  const voiceOptions = document.getElementById("voice-options");
+  const headlinesList = document.getElementById("headlines-list");
+  const headlinesContainer = document.getElementById("headlines-container");
 
   let wakeLock = null;
+
+  // --- playback speed ---
+  const speeds = [1, 1.25, 1.5, 2];
+  let speedIdx = 0;
+  speedBtn.addEventListener("click", () => {
+    speedIdx = (speedIdx + 1) % speeds.length;
+    const s = speeds[speedIdx];
+    audio.playbackRate = s;
+    speedBtn.textContent = `${s}×`;
+  });
+
+  // --- voice picker ---
+  const VOICE_KEY = "stiritata:voice";
+  let availableVoices = [];
+  let currentVoiceId = null;
+
+  function savedVoiceId() {
+    return safeGet(VOICE_KEY);
+  }
+
+  function buildVoiceSrc(voice, date) {
+    return `${voice.url}?v=${encodeURIComponent(date)}`;
+  }
+
+  function renderVoiceOptions() {
+    const activeId = currentVoiceId;
+    voiceOptions.innerHTML = availableVoices
+      .map(v => {
+        const icon = v.gender === "female" ? "👩" : "👨";
+        const active = v.id === activeId ? " voice-option--active" : "";
+        return `<button class="voice-option${active}" data-voice-id="${v.id}" type="button" aria-pressed="${v.id === activeId}">
+          <span class="voice-option__icon">${icon}</span>
+          <span>${v.label}</span>
+        </button>`;
+      })
+      .join("");
+
+    voiceOptions.querySelectorAll(".voice-option").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const vid = btn.dataset.voiceId;
+        const voice = availableVoices.find(v => v.id === vid);
+        if (!voice || vid === currentVoiceId) return;
+
+        const wasPlaying = !audio.paused;
+        const pos = audio.currentTime;
+
+        currentVoiceId = vid;
+        safeSet(VOICE_KEY, vid);
+        audio.src = buildVoiceSrc(voice, currentBulletinDate);
+
+        audio.addEventListener("loadedmetadata", () => {
+          audio.currentTime = Math.min(pos, audio.duration || 0);
+          if (wasPlaying) audio.play().catch(() => {});
+        }, { once: true });
+
+        renderVoiceOptions();
+      });
+    });
+  }
+
+  voiceBtn.addEventListener("click", () => {
+    voicePanel.hidden = !voicePanel.hidden;
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!voicePanel.hidden && !voicePanel.contains(e.target) && e.target !== voiceBtn) {
+      voicePanel.hidden = true;
+    }
+  });
 
   // --- position persistence (Feature 2) ---
 
@@ -120,6 +195,8 @@
   function setPlayIcon(isPlaying) {
     playIcon.textContent = isPlaying ? "⏸" : "▶";
     playBtn.setAttribute("aria-label", isPlaying ? "Pauză" : "Redare");
+    if (isPlaying) playBtn.classList.add("play-btn--playing");
+    else playBtn.classList.remove("play-btn--playing");
   }
 
   async function acquireWakeLock() {
@@ -209,6 +286,29 @@
     });
   }
 
+  function applyWeatherTheme(summary) {
+    if (!summary) return;
+    const s = summary.toLowerCase();
+    let theme = "theme-default";
+    if (s.includes("senin") || s.includes("clear")) theme = "theme-clear";
+    else if (s.includes("nor") || s.includes("cloud")) theme = "theme-clouds";
+    else if (s.includes("ploaie") || s.includes("rain") || s.includes("drizzle")) theme = "theme-rain";
+    else if (s.includes("zăpadă") || s.includes("snow")) theme = "theme-snow";
+    else if (s.includes("furtună") || s.includes("thunderstorm")) theme = "theme-storm";
+    document.body.className = theme;
+  }
+
+  function renderHeadlines(headlines) {
+    if (!headlines || headlines.length === 0) {
+      headlinesContainer.hidden = true;
+      return;
+    }
+    headlinesContainer.hidden = false;
+    headlinesList.innerHTML = headlines
+      .map(h => `<li class="headline-item">${h}</li>`)
+      .join("");
+  }
+
   async function loadManifestAndAudio() {
     statusEl.textContent = "";
     try {
@@ -220,9 +320,26 @@
       dateEl.textContent = `Buletin din ${formatDateRo(manifest.date)}`;
       currentBulletinDate = manifest.date;
       pruneOldPositionKeys(currentBulletinDate);
-      audio.src = `latest.mp3?v=${encodeURIComponent(manifest.date)}`;
+      // Set up voice picker if manifest has multiple voices.
+      if (Array.isArray(manifest.voices) && manifest.voices.length > 1) {
+        availableVoices = manifest.voices;
+        const preferred = savedVoiceId();
+        const match = availableVoices.find(v => v.id === preferred);
+        const chosen = match || availableVoices[0];
+        currentVoiceId = chosen.id;
+        audio.src = buildVoiceSrc(chosen, manifest.date);
+        voiceBtn.hidden = false;
+        renderVoiceOptions();
+      } else {
+        audio.src = `latest.mp3?v=${encodeURIComponent(manifest.date)}`;
+        voiceBtn.hidden = true;
+        voicePanel.hidden = true;
+      }
+
       setupMediaSession("Știri Tată", manifest.date);
       restorePositionOnce();
+      applyWeatherTheme(manifest.weather_summary);
+      renderHeadlines(manifest.headlines);
 
       if (Number.isFinite(manifest.duration_seconds)) {
         timeTotal.textContent = formatTime(manifest.duration_seconds);
@@ -233,6 +350,8 @@
       statusEl.textContent = "Folosim buletinul salvat local.";
       audio.src = "latest.mp3";
       dateEl.textContent = "Buletin din cache";
+      headlinesContainer.hidden = true;
+      voiceBtn.hidden = true;
     }
   }
 
