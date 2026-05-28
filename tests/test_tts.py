@@ -51,3 +51,45 @@ def test_synthesize_raises_if_voice_model_missing(tmp_path: Path):
     cfg = PiperConfig(voice_id="ro_RO-missing-medium", voice_dir=tmp_path)
     with pytest.raises(FileNotFoundError):
         synthesize(text="test", out_mp3=tmp_path / "out.mp3", config=cfg)
+
+
+from generator.tts import (
+    VOICE_BY_ID,
+    AVAILABLE_VOICES,
+    EdgeTTSConfig,
+    synthesize_voice,
+)
+
+
+def test_registry_has_female_alina_voice():
+    assert "alina" in VOICE_BY_ID
+    alina = VOICE_BY_ID["alina"]
+    assert alina.gender == "female"
+    assert alina.backend == "edge"
+    assert isinstance(alina.config, EdgeTTSConfig)
+    assert alina.config.voice == "ro-RO-AlinaNeural"
+
+
+def test_registry_exposes_three_voices():
+    ids = {v.id for v in AVAILABLE_VOICES}
+    assert ids == {"mihai", "alina", "emil"}
+
+
+def test_synthesize_voice_dispatches_to_edge_for_alina(tmp_path):
+    out = tmp_path / "latest-alina.mp3"
+    with patch("generator.tts.synthesize_edge", return_value=12.3) as edge_mock, \
+         patch("generator.tts.synthesize", return_value=0.0) as piper_mock:
+        dur = synthesize_voice(text="Salut", out_mp3=out, voice=VOICE_BY_ID["alina"])
+    assert dur == 12.3
+    assert edge_mock.called
+    assert not piper_mock.called
+
+
+def test_synthesize_voice_dispatches_to_piper_for_mihai(tmp_path):
+    out = tmp_path / "latest-mihai.mp3"
+    with patch("generator.tts.synthesize_edge", return_value=0.0) as edge_mock, \
+         patch("generator.tts.synthesize", return_value=7.7) as piper_mock:
+        dur = synthesize_voice(text="Salut", out_mp3=out, voice=VOICE_BY_ID["mihai"])
+    assert dur == 7.7
+    assert piper_mock.called
+    assert not edge_mock.called
