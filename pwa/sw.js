@@ -3,7 +3,7 @@
 // - AUDIO (latest.mp3): stale-while-revalidate keyed by manifest date.
 // - MANIFEST (latest.json): network-first with cache fallback.
 
-const SHELL_CACHE = "stiritata-shell-v2";
+const SHELL_CACHE = "stiritata-shell-v3";
 const AUDIO_CACHE = "stiritata-audio-v1";
 
 const SHELL_ASSETS = [
@@ -89,8 +89,20 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isShell(url)) {
+    // Stale-while-revalidate: serve cache fast, refresh in background so that
+    // future shell updates (CSS/JS) reach users on their next visit without
+    // needing a manual cache-version bump.
     event.respondWith(
-      caches.match(req).then((cached) => cached || fetch(req))
+      caches.open(SHELL_CACHE).then(async (cache) => {
+        const cached = await cache.match(req);
+        const networkPromise = fetch(req)
+          .then((resp) => {
+            if (resp && resp.ok) cache.put(req, resp.clone());
+            return resp;
+          })
+          .catch(() => cached);
+        return cached || networkPromise;
+      })
     );
     return;
   }
