@@ -206,9 +206,9 @@ from generator.main import _resolve_voices
 
 
 def test_resolve_voices_keeps_known_and_drops_unknown():
-    voices = _resolve_voices(["alina", "bogus", "mihai"])
+    voices = _resolve_voices(["alina", "bogus", "emil"])
     ids = [v.id for v in voices]
-    assert ids == ["alina", "mihai"]
+    assert ids == ["alina", "emil"]
 
 
 def test_resolve_voices_defaults_to_alina_when_all_unknown():

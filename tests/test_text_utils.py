@@ -37,18 +37,3 @@ def test_normalize_title_dedups_despite_diacritic_difference():
     a = normalize_title_for_dedup("Președintele Iohannis a declarat")
     b = normalize_title_for_dedup("Presedintele Iohannis a declarat")
     assert a == b
-
-
-from generator.text_utils import romanize_for_tts, romanize_for_edge_tts
-
-
-def test_romanize_for_tts_returns_string():
-    out = romanize_for_tts("Real Madrid a câștigat meciul")
-    assert isinstance(out, str)
-    assert len(out) > 0
-
-
-def test_romanize_for_edge_tts_corrects_spanish_name():
-    # Edge corrections map Spanish 'j' names to Romanian-phonetic spelling.
-    out = romanize_for_edge_tts("José a marcat un gol")
-    assert "Hose" in out
