@@ -34,17 +34,6 @@ jobs:
       - name: Install Python deps
         run: pip install -r requirements.txt
 
-      - name: Cache Piper voice model
-        id: cache-voice
-        uses: actions/cache@v4
-        with:
-          path: generator/voices
-          key: piper-voice-ro_RO-mihai-medium-v1
-
-      - name: Download Piper voice (if not cached)
-        if: steps.cache-voice.outputs.cache-hit != 'true'
-        run: bash scripts/download_voice.sh
-
       - name: Seed public/ from live site (fallback for generator failures)
         env:
           PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
@@ -59,7 +48,7 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
-          TTS_VOICES: alina,mihai,emil
+          TTS_VOICES: alina,emil
         run: python -m generator.main --sources sources.yaml --public-dir public
 
       - name: Verify bulletin is present (allow fallback, fail if totally missing)
