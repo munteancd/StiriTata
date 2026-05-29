@@ -214,7 +214,7 @@ def main() -> None:
     parser.add_argument(
         "--voices",
         default=None,
-        help="Comma-separated voice IDs to generate (e.g. alina,mihai,emil). "
+        help="Comma-separated voice IDs to generate (e.g. alina,emil). "
              "Overrides TTS_VOICES env var. Default: alina.",
     )
     args = parser.parse_args()
