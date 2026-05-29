@@ -27,14 +27,13 @@ html, body {
   -webkit-user-select: none;
   user-select: none;
   overscroll-behavior: none;
-  height: 100%;
   background-attachment: fixed;
   min-height: 100%;
 }
 
 body {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   min-height: 100vh;
   padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
